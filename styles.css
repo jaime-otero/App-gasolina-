@@ -212,6 +212,18 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .input-btn { display: flex; gap: 8px; margin-bottom: 8px; }
 .input-btn input { flex: 1; min-width: 0; }
 .input-btn .btn.icon { height: 46px; width: 46px; }
+
+/* Sugerencias de direcciones bajo «Desde» y «Hasta» */
+.ac { position: relative; }
+.suggest {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 10;
+  list-style: none; margin: 4px 0 0; padding: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+}
+.suggest li { padding: 10px; border-radius: 8px; cursor: pointer; }
+.suggest li.on, .suggest li:active { background: var(--accent-soft); }
+.suggest small { display: block; color: var(--muted); font-size: 13px; }
 #trip-to { margin-bottom: 0; }
 .route-actions { margin-bottom: 14px; }
 .route-actions .btn { font-size: 15px; padding: 11px 6px; }
