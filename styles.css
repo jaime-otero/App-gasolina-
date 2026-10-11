@@ -88,8 +88,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 }
 .segmented button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .car-picker button.on { color: #fff; }
-#view-summary .segmented { background: var(--card); }
-#view-summary .segmented button.on { background: var(--accent); color: #fff; }
+#view-summary .segmented, #view-refuel > .segmented { background: var(--card); }
+#view-summary .segmented button.on, #chart-period button.on { background: var(--accent); color: #fff; }
 
 .result {
   display: flex; gap: 12px; margin: 4px 0 14px;

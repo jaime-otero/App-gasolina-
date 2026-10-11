@@ -439,12 +439,12 @@ $('#refuel-form').addEventListener('submit', e => {
 });
 
 // Gráfica de litros acumulados: gastado (viajes) frente a repuesto (repostajes)
-function balanceChart(trips, refuels) {
+function balanceChart(trips, refuels, range) {
   const events = [
     ...trips.map(t => ({ date: t.date, spent: litersOf(t), refill: 0 })),
     ...refuels.map(r => ({ date: r.date, spent: 0, refill: r.liters })),
   ].sort((a, b) => a.date.localeCompare(b.date));
-  if (!events.length) return '<p class="empty chart-empty">Sin datos todavía.</p>';
+  if (!events.length) return `<p class="empty chart-empty">${range ? 'Sin datos en este periodo.' : 'Sin datos todavía.'}</p>`;
 
   // Un punto por día con los totales acumulados
   const days = [];
@@ -457,9 +457,12 @@ function balanceChart(trips, refuels) {
   }
 
   const DAY = 864e5;
-  const t0 = parseISO(days[0].date).getTime();
+  // Con periodo, el eje va del inicio del periodo hasta hoy (o su final si ya pasó)
+  const startDate = range ? range.from : days[0].date;
+  const t0 = parseISO(startDate).getTime();
   const lastDate = days[days.length - 1].date;
-  const endDate = todayISO() > lastDate ? todayISO() : lastDate;
+  let endDate = todayISO() > lastDate ? todayISO() : lastDate;
+  if (range && endDate > range.to) endDate = range.to;
   const t1 = Math.max(parseISO(endDate).getTime(), t0 + DAY);
   const yMax = Math.max(spent, refill, 1) * 1.1;
 
@@ -469,7 +472,7 @@ function balanceChart(trips, refuels) {
 
   // Línea escalonada: el total se mantiene hasta el siguiente día con datos
   const path = key => {
-    let d = `M${x(days[0].date).toFixed(1)},${y(0).toFixed(1)}`;
+    let d = `M${x(startDate).toFixed(1)},${y(0).toFixed(1)}`;
     for (const p of days) d += `H${x(p.date).toFixed(1)}V${y(p[key]).toFixed(1)}`;
     return d + `H${x(endDate).toFixed(1)}`;
   };
@@ -483,14 +486,14 @@ function balanceChart(trips, refuels) {
 
   return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Litros gastados y repuestos">
     ${grid}
-    <text x="${L}" y="${H - 6}">${short(days[0].date)}</text>
+    <text x="${L}" y="${H - 6}">${short(startDate)}</text>
     <text x="${W - R}" y="${H - 6}" text-anchor="end">${short(endDate)}</text>
     <path d="${path('refill')}" class="line refill"/>
     <path d="${path('spent')}" class="line spent"/>
   </svg>`;
 }
 
-function balanceCard(title, color, trips, refuels) {
+function balanceCard(title, color, trips, refuels, range) {
   const spent = trips.reduce((s, t) => s + litersOf(t), 0);
   const refill = refuels.reduce((s, r) => s + r.liters, 0);
   const diff = refill - spent;
@@ -498,7 +501,7 @@ function balanceCard(title, color, trips, refuels) {
   card.className = 'card';
   card.innerHTML = `
     <h2>${color ? `<span class="dot" style="background:${color}"></span>` : ''}${escapeHTML(title)}</h2>
-    ${balanceChart(trips, refuels)}
+    ${balanceChart(trips, refuels, range)}
     <div class="counters">
       <div class="spent"><strong>${fmt(spent, 1)}</strong><small>L gastados</small></div>
       <div class="refill"><strong>${fmt(refill, 1)}</strong><small>L repuestos</small></div>
@@ -507,17 +510,64 @@ function balanceCard(title, color, trips, refuels) {
   return card;
 }
 
-function renderRefuel() {
-  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
+// Gráfica que se ve: 'all' (total) o el id de un coche
+let chartCar = 'all';
 
+function renderChartPicker() {
+  const picker = $('#chart-picker');
+  picker.innerHTML = '';
+  const options = [{ id: 'all', name: 'Total', color: 'var(--accent)' }, ...state.cars];
+  for (const opt of options) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = opt.name;
+    if (opt.id === chartCar) {
+      b.classList.add('on');
+      b.style.background = opt.color;
+    }
+    b.addEventListener('click', () => { chartCar = opt.id; renderCharts(); });
+    picker.appendChild(b);
+  }
+}
+
+// Periodo de la gráfica: 'month', 'year' o 'all', con desplazamiento como en el Resumen
+let chartPeriod = 'month';
+let chartOffset = 0;
+
+document.querySelectorAll('#chart-period button').forEach(b => b.addEventListener('click', () => {
+  chartPeriod = b.dataset.period;
+  chartOffset = 0;
+  renderCharts();
+}));
+$('#chart-prev').addEventListener('click', () => { chartOffset--; renderCharts(); });
+$('#chart-next').addEventListener('click', () => { chartOffset++; renderCharts(); });
+
+function renderCharts() {
+  if (chartCar !== 'all' && !carById(chartCar)) chartCar = 'all';
+  renderChartPicker();
+
+  document.querySelectorAll('#chart-period button').forEach(b => b.classList.toggle('on', b.dataset.period === chartPeriod));
+  const { from, to, label } = periodRange(chartPeriod, chartOffset);
+  const showNav = chartPeriod !== 'all';
+  $('#chart-period-label').textContent = showNav ? label : 'Desde el principio';
+  $('#chart-prev').style.visibility = showNav ? 'visible' : 'hidden';
+  $('#chart-next').style.visibility = showNav ? 'visible' : 'hidden';
+  const range = showNav ? { from, to } : null;
+  const inRange = x => x.date >= from && x.date <= to;
+
+  const car = carById(chartCar);
+  const trips = state.trips.filter(t => inRange(t) && (!car || t.carId === car.id));
+  const refuels = state.refuels.filter(r => inRange(r) && (!car || r.carId === car.id));
   const charts = $('#refuel-charts');
   charts.innerHTML = '';
-  charts.appendChild(balanceCard('Total', null, state.trips, state.refuels));
-  for (const car of state.cars) {
-    charts.appendChild(balanceCard(car.name, car.color,
-      state.trips.filter(t => t.carId === car.id),
-      state.refuels.filter(r => r.carId === car.id)));
-  }
+  charts.appendChild(car
+    ? balanceCard(car.name, car.color, trips, refuels, range)
+    : balanceCard('Total', null, trips, refuels, range));
+}
+
+function renderRefuel() {
+  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
+  renderCharts();
 
   const list = $('#refuel-list');
   list.innerHTML = '';
@@ -555,7 +605,7 @@ function renderRefuel() {
 let period = 'week';
 let periodOffset = 0;
 
-function periodRange() {
+function periodRange(period, periodOffset) {
   const now = new Date();
   let start, end, label;
   if (period === 'week') {
@@ -588,7 +638,7 @@ $('#period-prev').addEventListener('click', () => { periodOffset--; renderSummar
 $('#period-next').addEventListener('click', () => { periodOffset++; renderSummary(); });
 
 function renderSummary() {
-  const { from, to, label } = periodRange();
+  const { from, to, label } = periodRange(period, periodOffset);
   $('#period-label').textContent = label;
   const showNav = period !== 'all';
   $('#period-prev').style.visibility = showNav ? 'visible' : 'hidden';

@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↓</span></div>
@@ -107,6 +107,17 @@
         <button type="button" id="refuel-cancel-btn" class="btn" hidden>Cancelar edición</button>
       </form>
 
+      <div id="chart-picker" class="segmented car-picker"></div>
+      <div class="segmented" id="chart-period">
+        <button type="button" data-period="month">Mes</button>
+        <button type="button" data-period="year">Año</button>
+        <button type="button" data-period="all">Todo</button>
+      </div>
+      <div class="period-nav">
+        <button type="button" id="chart-prev" class="btn icon" aria-label="Anterior">‹</button>
+        <span id="chart-period-label"></span>
+        <button type="button" id="chart-next" class="btn icon" aria-label="Siguiente">›</button>
+      </div>
       <div class="legend">
         <span><i class="spent"></i>Gastado</span>
         <span><i class="refill"></i>Repuesto</span>
@@ -183,6 +194,6 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
