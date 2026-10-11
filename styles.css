@@ -168,11 +168,4 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-.check { display: flex; align-items: center; gap: 10px; font-size: 16px; margin: 2px 0 6px; }
-.check input { width: 22px; height: 22px; accent-color: var(--accent); }
-
-.real-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.real-row:last-child { border-bottom: 0; }
-.real-row .grow { flex: 1; min-width: 0; }
-.real-row .big { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--text); margin-left: 4px; }
+#sum-trips .grow { cursor: pointer; }
