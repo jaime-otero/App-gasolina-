@@ -7,6 +7,8 @@ Web app (PWA) para el iPhone que calcula cuánta gasolina gastas en cada viaje c
   (`litros = km × consumo / 100`).
 - **Consumo predeterminado por coche** (L/100 km), editable en Ajustes. También se puede cambiar en un viaje concreto.
 - **Viajes comunes**: guarda trayectos habituales (ej. Casa → Uni) y rellénalos con un toque.
+- **Repostaje**: apunta los litros que echas a cada coche. Cuatro gráficas (total y una por coche) comparan los litros
+  **gastados** en viajes con los **repuestos**, acumulados en el tiempo, con contadores debajo (gastado, repuesto y diferencia).
 - **Resumen** por semana, mes, año o total, con desglose por coche y lista de viajes. Cada viaje se puede editar o borrar.
 - Funciona **sin conexión**. Los datos se guardan en el propio móvil; hay exportar/importar para hacer copia.
 
