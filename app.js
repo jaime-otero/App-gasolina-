@@ -422,5 +422,8 @@ function init() {
 init();
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {}));
 }
+
+// Pide al navegador que no borre los datos guardados aunque falte espacio
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
