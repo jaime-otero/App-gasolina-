@@ -5,6 +5,10 @@ Web app (PWA) para el iPhone que calcula cuánta gasolina gastas en cada viaje c
 ## Qué hace
 - **Registrar viajes**: eliges coche, pones los km y te dice al momento los litros gastados
   (`litros = km × consumo / 100`).
+- **Calcular los km con el mapa**: pones *Desde* y *Hasta* (o 📍 para usar tu ubicación) y pulsas *Calcular km*.
+  Busca las direcciones en OpenStreetMap (Nominatim) y la distancia por carretera con OSRM: gratis, sin clave, pero necesita conexión.
+- **Ida / Ida y vuelta**: con un toque se duplican los km (o se vuelven a dividir).
+- **Ver en Mapas**: abre la ruta en Apple Maps o Google Maps (se elige en Ajustes), también desde cada viaje del resumen.
 - **Consumo predeterminado por coche** (L/100 km), editable en Ajustes. También se puede cambiar en un viaje concreto.
 - **Viajes comunes**: guarda trayectos habituales (ej. Casa → Uni) y rellénalos con un toque.
 - **Repostaje**: apunta los litros que echas a cada coche. Cuatro gráficas (total y una por coche) comparan los litros

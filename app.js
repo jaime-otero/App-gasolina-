@@ -9,9 +9,10 @@ const DEFAULT_DATA = {
     { id: 'mama', name: 'Mamá', consumption: 6.5, color: 'var(--car-mama)' },
     { id: 'rojo', name: 'Rojo', consumption: 6.5, color: 'var(--car-rojo)' },
   ],
-  routes: [], // { id, name, km, carId|null }
-  trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note }
+  routes: [], // { id, name, km, carId|null, from, to, roundTrip }
+  trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note, from, to, roundTrip }
   refuels: [], // { id, date:'YYYY-MM-DD', carId, liters, note }
+  mapsApp: /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? 'apple' : 'google',
 };
 
 function load() {
@@ -124,6 +125,22 @@ function updateResult() {
 }
 ['#trip-km', '#trip-cons'].forEach(s => $(s).addEventListener('input', updateResult));
 
+// Ida / ida y vuelta. Los km del formulario son siempre el total del viaje:
+// al cambiar de modo se duplican o se dividen entre dos.
+let roundTrip = false;
+function setRoundTrip(on, adjustKm = false) {
+  on = !!on;
+  if (adjustKm && on !== roundTrip) {
+    const km = num($('#trip-km').value);
+    if (km > 0) $('#trip-km').value = Math.round((on ? km * 2 : km / 2) * 10) / 10;
+  }
+  roundTrip = on;
+  document.querySelectorAll('#trip-kind button').forEach(b => b.classList.toggle('on', (b.dataset.round === '1') === on));
+  updateResult();
+}
+document.querySelectorAll('#trip-kind button').forEach(b =>
+  b.addEventListener('click', () => setRoundTrip(b.dataset.round === '1', true)));
+
 function setEditMode(trip) {
   editingId = trip ? trip.id : null;
   $('#trip-submit').textContent = trip ? 'Guardar cambios' : 'Guardar viaje';
@@ -139,7 +156,8 @@ function editTrip(trip) {
   $('#trip-cons').value = trip.consumption;
   $('#trip-date').value = trip.date;
   $('#trip-note').value = trip.note || '';
-  updateResult();
+  setRouteFields(trip.from, trip.to);
+  setRoundTrip(trip.roundTrip);
   showView('trip');
 }
 
@@ -152,6 +170,8 @@ $('#cancel-edit-btn').addEventListener('click', () => {
 function resetTripForm() {
   $('#trip-km').value = '';
   $('#trip-note').value = '';
+  setRouteFields('', '');
+  setRoundTrip(false);
   $('#trip-date').value = todayISO();
   $('#trip-cons').value = carById(selectedCar).consumption;
   updateResult();
@@ -169,6 +189,9 @@ $('#trip-form').addEventListener('submit', e => {
     km,
     consumption,
     note: $('#trip-note').value.trim(),
+    from: $('#trip-from').value.trim(),
+    to: $('#trip-to').value.trim(),
+    roundTrip,
   };
   const existing = editingId && state.trips.find(t => t.id === editingId);
   if (existing) {
@@ -191,10 +214,12 @@ $('#trip-form').addEventListener('submit', e => {
 $('#save-route-btn').addEventListener('click', () => {
   const km = num($('#trip-km').value);
   if (km <= 0) return toast('Primero pon los kilómetros');
-  const suggested = $('#trip-note').value.trim();
+  const from = $('#trip-from').value.trim();
+  const to = $('#trip-to').value.trim();
+  const suggested = $('#trip-note').value.trim() || routeText({ from, to });
   const name = prompt('Nombre del viaje común (ej: Casa → Trabajo)', suggested);
   if (!name || !name.trim()) return;
-  state.routes.push({ id: uid(), name: name.trim(), km, carId: selectedCar });
+  state.routes.push({ id: uid(), name: name.trim(), km, carId: selectedCar, from, to, roundTrip });
   save();
   renderRoutes();
   toast('Viaje común guardado');
@@ -204,8 +229,9 @@ function applyRoute(route) {
   if (route.carId && carById(route.carId)) selectCar(route.carId);
   $('#trip-km').value = route.km;
   $('#trip-note').value = route.name;
-  updateResult();
-  toast(`${route.name}: ${fmt(route.km, 1)} km`);
+  setRouteFields(route.from, route.to);
+  setRoundTrip(route.roundTrip);
+  toast(`${route.name}: ${fmt(route.km, 1)} km${route.roundTrip ? ' (ida y vuelta)' : ''}`);
 }
 
 function renderRoutes() {
@@ -219,11 +245,138 @@ function renderRoutes() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chip';
-    b.innerHTML = `${escapeHTML(r.name)}<small>${fmt(r.km, 1)} km</small>`;
+    b.innerHTML = `${escapeHTML(r.name)}<small>${r.roundTrip ? '🔁 ' : ''}${fmt(r.km, 1)} km</small>`;
     b.addEventListener('click', () => applyRoute(r));
     list.appendChild(b);
   }
 }
+
+// ---------- Mapas: calcular km y abrir la ruta ----------
+// Direcciones con OpenStreetMap (Nominatim) y distancia por carretera con OSRM.
+// Son servicios gratuitos y sin clave; necesitan conexión.
+const routeText = r => [r.from, r.to].filter(Boolean).join(' → ');
+
+// Coordenadas de «📍 Mi ubicación», válidas mientras no se cambie el texto del campo
+let fromCoords = null;
+
+function setRouteFields(from, to) {
+  $('#trip-from').value = from || '';
+  $('#trip-to').value = to || '';
+  fromCoords = null;
+}
+$('#trip-from').addEventListener('input', () => { fromCoords = null; });
+
+async function getJSON(url) {
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+const geocodeCache = new Map();
+async function geocode(text) {
+  const key = text.toLowerCase();
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+  // viewbox de España con bounded=0: prefiere resultados de aquí sin excluir el resto
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=es'
+    + '&viewbox=-9.6,44.0,4.6,35.8&bounded=0&q=' + encodeURIComponent(text);
+  const [hit] = await getJSON(url);
+  if (!hit) return null;
+  const point = { lat: +hit.lat, lon: +hit.lon };
+  geocodeCache.set(key, point);
+  return point;
+}
+
+async function reverseGeocode({ lat, lon }) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=es&lat=${lat}&lon=${lon}`;
+  const { address: a = {}, display_name } = await getJSON(url);
+  const street = [a.road, a.house_number].filter(Boolean).join(' ');
+  const town = a.city || a.town || a.village || a.municipality;
+  return [street, town].filter(Boolean).join(', ') || display_name;
+}
+
+async function drivingKm(a, b) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+  const data = await getJSON(url);
+  if (data.code !== 'Ok' || !data.routes.length) return null;
+  return data.routes[0].distance / 1000;
+}
+
+function busy(btn, label) {
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  return () => { btn.disabled = false; btn.textContent = old; };
+}
+
+$('#locate-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) return toast('Este móvil no da la ubicación');
+  const done = busy($('#locate-btn'), '⏳');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const point = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    let label = 'Mi ubicación';
+    try { label = await reverseGeocode(point); } catch { /* sin conexión: basta con las coordenadas */ }
+    $('#trip-from').value = label;
+    fromCoords = point;
+    done();
+    $('#trip-to').focus();
+  }, () => {
+    done();
+    toast('No se pudo obtener la ubicación');
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+});
+
+async function calcKm() {
+  const from = $('#trip-from').value.trim();
+  const to = $('#trip-to').value.trim();
+  if (!from || !to) return toast('Pon desde dónde y hasta dónde');
+  if (!navigator.onLine) return toast('Sin conexión: pon los km a mano');
+  const done = busy($('#calc-km-btn'), '⏳ Calculando…');
+  try {
+    const a = fromCoords || await geocode(from);
+    if (!a) return toast(`No encuentro «${from}»`);
+    const b = await geocode(to);
+    if (!b) return toast(`No encuentro «${to}»`);
+    const km = await drivingKm(a, b);
+    if (km == null) return toast('No hay ruta en coche entre esos sitios');
+    const total = roundTrip ? km * 2 : km;
+    $('#trip-km').value = Math.round(total * 10) / 10;
+    updateResult();
+    toast(roundTrip ? `${fmt(km, 1)} km × 2 = ${fmt(total, 1)} km` : `${fmt(km, 1)} km por carretera`);
+  } catch {
+    toast('No se pudo calcular: pon los km a mano');
+  } finally {
+    done();
+  }
+}
+$('#calc-km-btn').addEventListener('click', calcKm);
+
+// Intro en «Desde» pasa a «Hasta»; en «Hasta» calcula en vez de guardar el viaje
+$('#trip-from').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); $('#trip-to').focus(); }
+});
+$('#trip-to').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); calcKm(); }
+});
+
+function openMaps(from, to) {
+  if (!to) return toast('Pon al menos el destino');
+  const q = encodeURIComponent;
+  const url = state.mapsApp === 'apple'
+    ? `https://maps.apple.com/?${from ? `saddr=${q(from)}&` : ''}daddr=${q(to)}&dirflg=d`
+    : `https://www.google.com/maps/dir/?api=1${from ? `&origin=${q(from)}` : ''}&destination=${q(to)}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+$('#open-maps-btn').addEventListener('click', () => {
+  // Con «📍» se manda la posición exacta en vez del texto aproximado
+  const from = fromCoords ? `${fromCoords.lat},${fromCoords.lon}` : $('#trip-from').value.trim();
+  openMaps(from, $('#trip-to').value.trim());
+});
+
+document.querySelectorAll('#maps-picker button').forEach(b => b.addEventListener('click', () => {
+  state.mapsApp = b.dataset.maps;
+  save();
+  renderSettings();
+}));
 
 // ---------- Repostaje ----------
 let refuelCar = state.cars[0].id;
@@ -484,14 +637,16 @@ function renderSummary() {
     li.innerHTML = `
       <span class="dot" style="background:${car.color}"></span>
       <div class="grow">
-        <div>${escapeHTML(car.name)} · ${fmt(t.km, 1)} km</div>
-        <div class="sub">${prettyDate(t.date)}${t.note ? ' · ' + escapeHTML(t.note) : ''}</div>
+        <div>${escapeHTML(car.name)} · ${fmt(t.km, 1)} km${t.roundTrip ? ' · 🔁' : ''}</div>
+        <div class="sub">${prettyDate(t.date)}${t.note || t.from ? ' · ' + escapeHTML(t.note || routeText(t)) : ''}</div>
       </div>
       <div class="amount">${fmt(litersOf(t))} L<br><span class="sub">${fmt(t.consumption, 1)} L/100</span></div>
+      ${t.from && t.to ? '<button type="button" class="btn small" data-act="map" aria-label="Ver en Mapas">🗺️</button>' : ''}
       <button type="button" class="btn small" data-act="edit" aria-label="Editar">✎</button>
       <button type="button" class="btn small danger" data-act="del" aria-label="Borrar">✕</button>`;
     li.querySelector('.grow').addEventListener('click', () => editTrip(t));
     li.querySelector('[data-act=edit]').addEventListener('click', () => editTrip(t));
+    li.querySelector('[data-act=map]')?.addEventListener('click', () => openMaps(t.from, t.to));
     li.querySelector('[data-act=del]').addEventListener('click', () => {
       if (!confirm('¿Borrar este viaje?')) return;
       if (editingId === t.id) { setEditMode(null); resetTripForm(); }
@@ -527,6 +682,8 @@ function renderSettings() {
   }
 
 
+  document.querySelectorAll('#maps-picker button').forEach(b => b.classList.toggle('on', b.dataset.maps === state.mapsApp));
+
   const routes = $('#routes-settings');
   routes.innerHTML = '';
   if (!state.routes.length) {
@@ -538,7 +695,7 @@ function renderSettings() {
     li.innerHTML = `
       <div class="grow">
         <div>${escapeHTML(r.name)}</div>
-        <div class="sub">${fmt(r.km, 1)} km${car ? ' · ' + escapeHTML(car.name) : ''}</div>
+        <div class="sub">${fmt(r.km, 1)} km${r.roundTrip ? ' (ida y vuelta)' : ''}${car ? ' · ' + escapeHTML(car.name) : ''}${r.from ? ' · ' + escapeHTML(routeText(r)) : ''}</div>
       </div>
       <button type="button" class="btn small" data-act="edit">Editar</button>
       <button type="button" class="btn small danger" data-act="del" aria-label="Borrar">✕</button>`;
