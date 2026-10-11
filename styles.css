@@ -29,7 +29,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+[hidden] { display: none !important; }
+html, body { margin: 0; overscroll-behavior-y: contain; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -169,3 +170,18 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 #sum-trips .grow { cursor: pointer; }
+
+/* Deslizar hacia abajo para recargar */
+.ptr {
+  position: fixed; left: 50%; top: calc(8px + env(safe-area-inset-top)); z-index: 30;
+  width: 40px; height: 40px; margin-left: -20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  font-size: 20px; font-weight: 700;
+  transform: translateY(-60px); opacity: 0; pointer-events: none;
+}
+.ptr.anim { transition: transform .2s, opacity .2s; }
+.ptr-icon { display: inline-block; transition: transform .2s; }
+.ptr.ready .ptr-icon { transform: rotate(180deg); }
+.ptr.loading .ptr-icon { animation: ptr-spin .8s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
