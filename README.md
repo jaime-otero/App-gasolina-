@@ -3,12 +3,12 @@
 Web app (PWA) para el iPhone que calcula cuánta gasolina gastas en cada viaje con los coches de la familia (**Papá**, **Mamá** y **Rojo**).
 
 ## Qué hace
-- **Registrar viajes**: eliges coche, pones los km y te dice al momento los litros y euros gastados
-  (`litros = km × consumo / 100`, `€ = litros × precio`).
+- **Registrar viajes**: eliges coche, pones los km y te dice al momento los litros gastados
+  (`litros = km × consumo / 100`).
 - **Consumo predeterminado por coche** (L/100 km), editable en Ajustes. También se puede cambiar en un viaje concreto.
-- **Repostajes**: apunta cuentakilómetros, litros y precio. Con dos repostajes de depósito lleno calcula el
+- **Repostajes**: apunta cuentakilómetros y litros. Con dos repostajes de depósito lleno calcula el
   **consumo real** de cada coche (contando también los repostajes parciales entre medias) y puedes usarlo como
-  consumo predeterminado con un toque. El último precio pagado pasa a ser el precio por defecto.
+  consumo predeterminado con un toque.
 - **Viajes comunes**: guarda trayectos habituales (ej. Casa → Uni) y rellénalos con un toque.
 - **Resumen** por semana, mes, año o total, con desglose por coche y lista de viajes.
 - Funciona **sin conexión**. Los datos se guardan en el propio móvil; hay exportar/importar para hacer copia.
