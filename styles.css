@@ -7,6 +7,8 @@
   --accent: #0f766e;
   --accent-soft: #ccfbf1;
   --danger: #b91c1c;
+  --spent: #ea580c;
+  --refill: #0f766e;
   --car-papa: #2563eb;
   --car-mama: #9333ea;
   --car-rojo: #dc2626;
@@ -22,6 +24,8 @@
     --accent: #2dd4bf;
     --accent-soft: #134e4a;
     --danger: #f87171;
+    --spent: #fb923c;
+    --refill: #2dd4bf;
     --car-papa: #60a5fa;
     --car-mama: #c084fc;
     --car-rojo: #f87171;
@@ -170,6 +174,24 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 #sum-trips .grow { cursor: pointer; }
+
+/* Repostaje: gráficas gastado / repuesto */
+.card h2 .dot { display: inline-block; margin-right: 8px; vertical-align: middle; }
+.legend { display: flex; justify-content: center; gap: 18px; font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.legend i.spent, .chart .spent { background: var(--spent); stroke: var(--spent); }
+.legend i.refill, .chart .refill { background: var(--refill); stroke: var(--refill); }
+.chart { display: block; width: 100%; height: auto; margin: 4px 0 10px; }
+.chart .line { fill: none; stroke-width: 2.5; stroke-linejoin: round; background: none; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.chart-empty { text-align: center; padding: 24px 0; }
+.counters { display: flex; gap: 8px; }
+.counters > div { flex: 1; text-align: center; padding: 10px 4px; background: var(--bg); border-radius: 12px; }
+.counters strong { display: block; font-size: 19px; font-variant-numeric: tabular-nums; }
+.counters small { color: var(--muted); font-size: 12px; }
+.counters .spent strong { color: var(--spent); }
+.counters .refill strong { color: var(--refill); }
 
 /* Deslizar hacia abajo para recargar */
 .ptr {

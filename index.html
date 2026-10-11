@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↓</span></div>
@@ -65,6 +65,44 @@
       </div>
     </section>
 
+    <!-- ===== REPOSTAJE ===== -->
+    <section id="view-refuel" class="view">
+      <form id="refuel-form" class="card" autocomplete="off">
+        <label class="field-label">Coche</label>
+        <div id="refuel-car-picker" class="segmented car-picker"></div>
+
+        <div class="row">
+          <label class="field">
+            <span>Litros repostados</span>
+            <input id="refuel-liters" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required>
+          </label>
+          <label class="field">
+            <span>Fecha</span>
+            <input id="refuel-date" type="date" required>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Nota (opcional)</span>
+          <input id="refuel-note" type="text" placeholder="Ej: Repsol de la rotonda">
+        </label>
+
+        <button type="submit" id="refuel-submit" class="btn primary">Guardar repostaje</button>
+        <button type="button" id="refuel-cancel-btn" class="btn" hidden>Cancelar edición</button>
+      </form>
+
+      <div class="legend">
+        <span><i class="spent"></i>Gastado</span>
+        <span><i class="refill"></i>Repuesto</span>
+      </div>
+      <div id="refuel-charts"></div>
+
+      <div class="card">
+        <h2>Repostajes</h2>
+        <ul id="refuel-list" class="list"></ul>
+      </div>
+    </section>
+
     <!-- ===== RESUMEN ===== -->
     <section id="view-summary" class="view">
       <div class="segmented" id="period-picker">
@@ -113,13 +151,14 @@
   </main>
 
   <nav class="tabbar">
-    <button type="button" data-view="trip" class="on"><span>⛽</span>Viaje</button>
+    <button type="button" data-view="trip" class="on"><span>🚗</span>Viaje</button>
+    <button type="button" data-view="refuel"><span>⛽</span>Repostaje</button>
     <button type="button" data-view="summary"><span>📊</span>Resumen</button>
     <button type="button" data-view="settings"><span>⚙️</span>Ajustes</button>
   </nav>
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

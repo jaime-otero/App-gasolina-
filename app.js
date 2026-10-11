@@ -11,6 +11,7 @@ const DEFAULT_DATA = {
   ],
   routes: [], // { id, name, km, carId|null }
   trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note }
+  refuels: [], // { id, date:'YYYY-MM-DD', carId, liters, note }
 };
 
 function load() {
@@ -78,12 +79,13 @@ function toast(msg) {
 }
 
 // ---------- Navegación ----------
-const TITLES = { trip: 'Nuevo viaje', summary: 'Resumen', settings: 'Ajustes' };
+const TITLES = { trip: 'Nuevo viaje', refuel: 'Repostaje', summary: 'Resumen', settings: 'Ajustes' };
 
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
   $('#title').textContent = name === 'trip' && editingId ? 'Editar viaje' : TITLES[name];
+  if (name === 'refuel') renderRefuel();
   if (name === 'summary') renderSummary();
   if (name === 'settings') renderSettings();
   window.scrollTo(0, 0);
@@ -220,6 +222,179 @@ function renderRoutes() {
     b.innerHTML = `${escapeHTML(r.name)}<small>${fmt(r.km, 1)} km</small>`;
     b.addEventListener('click', () => applyRoute(r));
     list.appendChild(b);
+  }
+}
+
+// ---------- Repostaje ----------
+let refuelCar = state.cars[0].id;
+let refuelEditingId = null; // id del repostaje que se está editando, o null si es nuevo
+
+function selectRefuelCar(id) {
+  refuelCar = id;
+  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
+}
+
+function setRefuelEditMode(r) {
+  refuelEditingId = r ? r.id : null;
+  $('#refuel-submit').textContent = r ? 'Guardar cambios' : 'Guardar repostaje';
+  $('#refuel-cancel-btn').hidden = !r;
+}
+
+function resetRefuelForm() {
+  $('#refuel-liters').value = '';
+  $('#refuel-note').value = '';
+  $('#refuel-date').value = todayISO();
+}
+
+function editRefuel(r) {
+  setRefuelEditMode(r);
+  if (carById(r.carId)) refuelCar = r.carId;
+  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
+  $('#refuel-liters').value = r.liters;
+  $('#refuel-date').value = r.date;
+  $('#refuel-note').value = r.note || '';
+  window.scrollTo(0, 0);
+}
+
+$('#refuel-cancel-btn').addEventListener('click', () => {
+  setRefuelEditMode(null);
+  resetRefuelForm();
+});
+
+$('#refuel-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const liters = num($('#refuel-liters').value);
+  if (liters <= 0) return toast('Pon los litros');
+  const fields = {
+    date: $('#refuel-date').value || todayISO(),
+    carId: refuelCar,
+    liters,
+    note: $('#refuel-note').value.trim(),
+  };
+  const existing = refuelEditingId && state.refuels.find(r => r.id === refuelEditingId);
+  if (existing) {
+    Object.assign(existing, fields);
+    toast(`Repostaje actualizado: ${fmt(liters)} L`);
+  } else {
+    state.refuels.push({ id: uid(), ...fields });
+    toast(`Repostado: ${fmt(liters)} L`);
+  }
+  save();
+  setRefuelEditMode(null);
+  resetRefuelForm();
+  renderRefuel();
+});
+
+// Gráfica de litros acumulados: gastado (viajes) frente a repuesto (repostajes)
+function balanceChart(trips, refuels) {
+  const events = [
+    ...trips.map(t => ({ date: t.date, spent: litersOf(t), refill: 0 })),
+    ...refuels.map(r => ({ date: r.date, spent: 0, refill: r.liters })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  if (!events.length) return '<p class="empty chart-empty">Sin datos todavía.</p>';
+
+  // Un punto por día con los totales acumulados
+  const days = [];
+  let spent = 0, refill = 0;
+  for (const ev of events) {
+    spent += ev.spent; refill += ev.refill;
+    const last = days[days.length - 1];
+    if (last && last.date === ev.date) { last.spent = spent; last.refill = refill; }
+    else days.push({ date: ev.date, spent, refill });
+  }
+
+  const DAY = 864e5;
+  const t0 = parseISO(days[0].date).getTime();
+  const lastDate = days[days.length - 1].date;
+  const endDate = todayISO() > lastDate ? todayISO() : lastDate;
+  const t1 = Math.max(parseISO(endDate).getTime(), t0 + DAY);
+  const yMax = Math.max(spent, refill, 1) * 1.1;
+
+  const W = 320, H = 150, L = 34, R = 8, T = 10, B = 22;
+  const x = d => L + (parseISO(d).getTime() - t0) / (t1 - t0) * (W - L - R);
+  const y = v => T + (1 - v / yMax) * (H - T - B);
+
+  // Línea escalonada: el total se mantiene hasta el siguiente día con datos
+  const path = key => {
+    let d = `M${x(days[0].date).toFixed(1)},${y(0).toFixed(1)}`;
+    for (const p of days) d += `H${x(p.date).toFixed(1)}V${y(p[key]).toFixed(1)}`;
+    return d + `H${x(endDate).toFixed(1)}`;
+  };
+
+  const short = s => parseISO(s).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const grid = [0, 0.5, 1].map(f => {
+    const v = yMax / 1.1 * f;
+    return `<line x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" class="grid"/>
+      <text x="${L - 4}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(v, 0)}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Litros gastados y repuestos">
+    ${grid}
+    <text x="${L}" y="${H - 6}">${short(days[0].date)}</text>
+    <text x="${W - R}" y="${H - 6}" text-anchor="end">${short(endDate)}</text>
+    <path d="${path('refill')}" class="line refill"/>
+    <path d="${path('spent')}" class="line spent"/>
+  </svg>`;
+}
+
+function balanceCard(title, color, trips, refuels) {
+  const spent = trips.reduce((s, t) => s + litersOf(t), 0);
+  const refill = refuels.reduce((s, r) => s + r.liters, 0);
+  const diff = refill - spent;
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h2>${color ? `<span class="dot" style="background:${color}"></span>` : ''}${escapeHTML(title)}</h2>
+    ${balanceChart(trips, refuels)}
+    <div class="counters">
+      <div class="spent"><strong>${fmt(spent, 1)}</strong><small>L gastados</small></div>
+      <div class="refill"><strong>${fmt(refill, 1)}</strong><small>L repuestos</small></div>
+      <div><strong>${diff > 0 ? '+' : ''}${fmt(diff, 1)}</strong><small>diferencia</small></div>
+    </div>`;
+  return card;
+}
+
+function renderRefuel() {
+  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
+
+  const charts = $('#refuel-charts');
+  charts.innerHTML = '';
+  charts.appendChild(balanceCard('Total', null, state.trips, state.refuels));
+  for (const car of state.cars) {
+    charts.appendChild(balanceCard(car.name, car.color,
+      state.trips.filter(t => t.carId === car.id),
+      state.refuels.filter(r => r.carId === car.id)));
+  }
+
+  const list = $('#refuel-list');
+  list.innerHTML = '';
+  const refuels = [...state.refuels].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  if (!refuels.length) {
+    list.innerHTML = '<li class="empty">Aún no hay repostajes.</li>';
+    return;
+  }
+  for (const r of refuels) {
+    const car = carById(r.carId) || { name: '?', color: 'var(--muted)' };
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="dot" style="background:${car.color}"></span>
+      <div class="grow">
+        <div>${escapeHTML(car.name)}</div>
+        <div class="sub">${prettyDate(r.date)}${r.note ? ' · ' + escapeHTML(r.note) : ''}</div>
+      </div>
+      <div class="amount">${fmt(r.liters)} L</div>
+      <button type="button" class="btn small" data-act="edit" aria-label="Editar">✎</button>
+      <button type="button" class="btn small danger" data-act="del" aria-label="Borrar">✕</button>`;
+    li.querySelector('.grow').addEventListener('click', () => editRefuel(r));
+    li.querySelector('[data-act=edit]').addEventListener('click', () => editRefuel(r));
+    li.querySelector('[data-act=del]').addEventListener('click', () => {
+      if (!confirm('¿Borrar este repostaje?')) return;
+      if (refuelEditingId === r.id) { setRefuelEditMode(null); resetRefuelForm(); }
+      state.refuels = state.refuels.filter(x => x.id !== r.id);
+      save();
+      renderRefuel();
+    });
+    list.appendChild(li);
   }
 }
 
@@ -404,7 +579,7 @@ $('#import-file').addEventListener('change', async e => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     state = load();
     save();
-    selectedCar = state.cars[0].id;
+    selectedCar = refuelCar = state.cars[0].id;
     init();
     renderSettings();
     toast('Datos importados');
@@ -470,6 +645,7 @@ function init() {
   renderCarPicker();
   renderRoutes();
   resetTripForm();
+  resetRefuelForm();
 }
 init();
 
