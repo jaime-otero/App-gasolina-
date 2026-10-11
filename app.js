@@ -256,15 +256,18 @@ function renderRoutes() {
 // Son servicios gratuitos y sin clave; necesitan conexión.
 const routeText = r => [r.from, r.to].filter(Boolean).join(' → ');
 
-// Coordenadas de «📍 Mi ubicación», válidas mientras no se cambie el texto del campo
+// Coordenadas de «📍 Mi ubicación» o de una sugerencia elegida,
+// válidas mientras no se cambie el texto del campo
 let fromCoords = null;
+let toCoords = null;
 
 function setRouteFields(from, to) {
   $('#trip-from').value = from || '';
   $('#trip-to').value = to || '';
-  fromCoords = null;
+  fromCoords = toCoords = null;
 }
 $('#trip-from').addEventListener('input', () => { fromCoords = null; });
+$('#trip-to').addEventListener('input', () => { toCoords = null; });
 
 async function getJSON(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -301,6 +304,79 @@ async function drivingKm(a, b) {
   return data.routes[0].distance / 1000;
 }
 
+// Sugerencias mientras se escribe, con Photon (OpenStreetMap): gratis y sin clave
+async function suggestPlaces(text, signal) {
+  // Prioriza lo cercano al origen ya elegido, o si no, el centro de España
+  const near = fromCoords || { lat: 40.4, lon: -3.7 };
+  const url = `https://photon.komoot.io/api/?limit=5&lat=${near.lat}&lon=${near.lon}&q=` + encodeURIComponent(text);
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { features = [] } = await res.json();
+  const seen = new Set();
+  return features.map(({ geometry, properties: p }) => {
+    const street = [p.street, p.housenumber].filter(Boolean).join(' ');
+    const main = p.name || street || p.city;
+    const town = p.city || p.town || p.village || p.county;
+    const detail = [p.name && street, town !== main && town, p.state].filter(Boolean).join(', ');
+    const label = [main, town !== main && town].filter(Boolean).join(', ');
+    const [lon, lat] = geometry.coordinates;
+    return { main, detail, label, point: { lat, lon } };
+  }).filter(s => s.main && !seen.has(s.label + s.detail) && seen.add(s.label + s.detail));
+}
+
+function setupSuggest(input, list, onPick) {
+  let items = [];
+  let active = -1;
+  let timer = 0;
+  let ctrl = null;
+  const close = () => { list.hidden = true; items = []; active = -1; };
+  const highlight = i => {
+    active = i;
+    [...list.children].forEach((li, j) => li.classList.toggle('on', j === i));
+  };
+  const pick = s => {
+    input.value = s.label;
+    onPick(s.point);
+    close();
+  };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    ctrl?.abort();
+    const text = input.value.trim();
+    if (text.length < 3 || !navigator.onLine) return close();
+    timer = setTimeout(async () => {
+      ctrl = new AbortController();
+      try {
+        items = await suggestPlaces(text, ctrl.signal);
+      } catch { return; /* sin conexión o cancelada: sin sugerencias */ }
+      if (document.activeElement !== input || !items.length) return close();
+      list.innerHTML = items.map(s =>
+        `<li role="option">${escapeHTML(s.main)}${s.detail ? `<small>${escapeHTML(s.detail)}</small>` : ''}</li>`).join('');
+      [...list.children].forEach((li, i) => {
+        // pointerdown + preventDefault para que el campo no pierda el foco antes del toque
+        li.addEventListener('pointerdown', e => { e.preventDefault(); pick(items[i]); });
+      });
+      active = -1;
+      list.hidden = false;
+    }, 300);
+  });
+  input.addEventListener('keydown', e => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = items.length;
+      highlight(e.key === 'ArrowDown' ? (active + 1) % n : (active - 1 + n) % n);
+    } else if (e.key === 'Enter' && active >= 0) {
+      pick(items[active]);
+    } else if (e.key === 'Escape') {
+      close();
+    }
+  });
+  input.addEventListener('blur', () => { clearTimeout(timer); ctrl?.abort(); close(); });
+}
+setupSuggest($('#trip-from'), $('#trip-from-suggest'), p => { fromCoords = p; });
+setupSuggest($('#trip-to'), $('#trip-to-suggest'), p => { toCoords = p; });
+
 function busy(btn, label) {
   const old = btn.textContent;
   btn.disabled = true;
@@ -334,7 +410,7 @@ async function calcKm() {
   try {
     const a = fromCoords || await geocode(from);
     if (!a) return toast(`No encuentro «${from}»`);
-    const b = await geocode(to);
+    const b = toCoords || await geocode(to);
     if (!b) return toast(`No encuentro «${to}»`);
     const km = await drivingKm(a, b);
     if (km == null) return toast('No hay ruta en coche entre esos sitios');
