@@ -1,6 +1,6 @@
 // Cachea la app para que funcione sin conexión.
 // Sube la versión cuando cambies algún archivo para que el móvil coja la nueva.
-const CACHE = 'gasolina-v1';
+const CACHE = 'gasolina-v2';
 const FILES = [
   './',
   'index.html',
