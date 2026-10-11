@@ -24,7 +24,7 @@
     <section id="view-trip" class="view active">
       <form id="trip-form" class="card" autocomplete="off">
         <label class="field-label">Coche</label>
-        <div id="car-picker" class="segmented"></div>
+        <div id="car-picker" class="segmented car-picker"></div>
 
         <div class="row">
           <label class="field">
@@ -66,6 +66,60 @@
         <h2>Viajes comunes</h2>
         <p class="hint">Toca uno para rellenar el formulario.</p>
         <div id="routes-list" class="chips"></div>
+      </div>
+    </section>
+
+    <!-- ===== REPOSTAR ===== -->
+    <section id="view-refuel" class="view">
+      <form id="refuel-form" class="card" autocomplete="off">
+        <label class="field-label">Coche</label>
+        <div id="refuel-car-picker" class="segmented car-picker"></div>
+
+        <div class="row">
+          <label class="field">
+            <span>Cuentakilómetros</span>
+            <input id="refuel-odo" type="number" inputmode="decimal" step="1" min="0" placeholder="Ej: 123456" required>
+          </label>
+          <label class="field">
+            <span>Fecha</span>
+            <input id="refuel-date" type="date" required>
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            <span>Litros</span>
+            <input id="refuel-liters" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required>
+          </label>
+          <label class="field">
+            <span>Precio (€/L)</span>
+            <input id="refuel-price" type="number" inputmode="decimal" step="0.001" min="0">
+          </label>
+        </div>
+
+        <label class="check">
+          <input id="refuel-full" type="checkbox" checked>
+          <span>Depósito lleno</span>
+        </label>
+        <p class="hint">Para calcular el consumo real, llena el depósito y apunta el cuentakilómetros cada vez.</p>
+
+        <div class="result">
+          <div><strong id="refuel-total">0,00 €</strong><small>total</small></div>
+          <div><strong id="refuel-odo-hint">—</strong><small>último cuentakm</small></div>
+        </div>
+
+        <button type="submit" class="btn primary">Guardar repostaje</button>
+      </form>
+
+      <div class="card">
+        <h2>Consumo real</h2>
+        <p class="hint">Calculado entre repostajes con el depósito lleno.</p>
+        <div id="real-consumption"></div>
+      </div>
+
+      <div class="card">
+        <h2>Repostajes</h2>
+        <ul id="refuel-list" class="list"></ul>
       </div>
     </section>
 
@@ -126,6 +180,7 @@
 
   <nav class="tabbar">
     <button type="button" data-view="trip" class="on"><span>⛽</span>Viaje</button>
+    <button type="button" data-view="refuel"><span>🧾</span>Repostar</button>
     <button type="button" data-view="summary"><span>📊</span>Resumen</button>
     <button type="button" data-view="settings"><span>⚙️</span>Ajustes</button>
   </nav>
