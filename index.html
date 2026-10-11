@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Gasolina">
+  <title>Mi Gasolina</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="title">Nuevo viaje</h1>
+  </header>
+
+  <main>
+    <!-- ===== NUEVO VIAJE ===== -->
+    <section id="view-trip" class="view active">
+      <form id="trip-form" class="card" autocomplete="off">
+        <label class="field-label">Coche</label>
+        <div id="car-picker" class="segmented"></div>
+
+        <div class="row">
+          <label class="field">
+            <span>Kilómetros</span>
+            <input id="trip-km" type="number" inputmode="decimal" step="0.1" min="0" placeholder="0" required>
+          </label>
+          <label class="field">
+            <span>Consumo (L/100 km)</span>
+            <input id="trip-cons" type="number" inputmode="decimal" step="0.1" min="0" required>
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            <span>Fecha</span>
+            <input id="trip-date" type="date" required>
+          </label>
+          <label class="field">
+            <span>Precio (€/L)</span>
+            <input id="trip-price" type="number" inputmode="decimal" step="0.001" min="0">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Nota (opcional)</span>
+          <input id="trip-note" type="text" placeholder="Ej: casa → uni">
+        </label>
+
+        <div class="result">
+          <div><strong id="res-liters">0,00 L</strong><small>gasolina</small></div>
+          <div><strong id="res-euros">0,00 €</strong><small>coste</small></div>
+        </div>
+
+        <button type="submit" class="btn primary">Guardar viaje</button>
+        <button type="button" id="save-route-btn" class="btn ghost">☆ Guardar como viaje común</button>
+      </form>
+
+      <div class="card">
+        <h2>Viajes comunes</h2>
+        <p class="hint">Toca uno para rellenar el formulario.</p>
+        <div id="routes-list" class="chips"></div>
+      </div>
+    </section>
+
+    <!-- ===== RESUMEN ===== -->
+    <section id="view-summary" class="view">
+      <div class="segmented" id="period-picker">
+        <button type="button" data-period="week" class="on">Semana</button>
+        <button type="button" data-period="month">Mes</button>
+        <button type="button" data-period="year">Año</button>
+        <button type="button" data-period="all">Todo</button>
+      </div>
+      <div class="period-nav">
+        <button type="button" id="period-prev" class="btn icon" aria-label="Anterior">‹</button>
+        <span id="period-label"></span>
+        <button type="button" id="period-next" class="btn icon" aria-label="Siguiente">›</button>
+      </div>
+      <div class="card totals">
+        <div><strong id="sum-liters">0</strong><small>litros</small></div>
+        <div><strong id="sum-euros">0</strong><small>euros</small></div>
+        <div><strong id="sum-km">0</strong><small>km</small></div>
+      </div>
+      <div class="card">
+        <h2>Por coche</h2>
+        <div id="sum-by-car"></div>
+      </div>
+      <div class="card">
+        <h2>Viajes del periodo</h2>
+        <ul id="sum-trips" class="list"></ul>
+      </div>
+    </section>
+
+    <!-- ===== AJUSTES ===== -->
+    <section id="view-settings" class="view">
+      <div class="card">
+        <h2>Coches</h2>
+        <p class="hint">Consumo predeterminado de cada coche (L/100 km).</p>
+        <div id="cars-settings"></div>
+      </div>
+      <div class="card">
+        <h2>Precio de la gasolina</h2>
+        <label class="field">
+          <span>Precio por defecto (€/L)</span>
+          <input id="default-price" type="number" inputmode="decimal" step="0.001" min="0">
+        </label>
+      </div>
+      <div class="card">
+        <h2>Viajes comunes</h2>
+        <ul id="routes-settings" class="list"></ul>
+      </div>
+      <div class="card">
+        <h2>Copia de seguridad</h2>
+        <p class="hint">Los datos se guardan solo en este móvil. Exporta de vez en cuando.</p>
+        <button type="button" id="export-btn" class="btn">Exportar datos</button>
+        <label class="btn">Importar datos<input id="import-file" type="file" accept="application/json,.json" hidden></label>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button type="button" data-view="trip" class="on"><span>⛽</span>Viaje</button>
+    <button type="button" data-view="summary"><span>📊</span>Resumen</button>
+    <button type="button" data-view="settings"><span>⚙️</span>Ajustes</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1c1f24;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+  --danger: #b91c1c;
+  --car-papa: #2563eb;
+  --car-mama: #9333ea;
+  --car-rojo: #dc2626;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d23;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --line: #2c3038;
+    --accent: #2dd4bf;
+    --accent-soft: #134e4a;
+    --danger: #f87171;
+    --car-papa: #60a5fa;
+    --car-mama: #c084fc;
+    --car-rojo: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg);
+  padding: calc(12px + env(safe-area-inset-top)) 16px 8px;
+}
+.topbar h1 { margin: 0; font-size: 28px; }
+
+main { padding: 0 16px 16px; max-width: 560px; margin: 0 auto; }
+.view { display: none; }
+.view.active { display: block; }
+
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.card h2 { margin: 0 0 6px; font-size: 17px; }
+.hint { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+
+.field-label, .field span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.field { display: block; margin-bottom: 12px; flex: 1; min-width: 0; }
+.row { display: flex; gap: 12px; }
+input[type=number], input[type=text], input[type=date] {
+  width: 100%;
+  font-size: 17px; /* >=16px evita el zoom de iOS */
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 46px;
+}
+input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+.segmented { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+.segmented button {
+  flex: 1; border: 0; background: transparent; color: var(--text);
+  font-size: 15px; font-weight: 600; padding: 10px 4px; border-radius: 9px;
+}
+.segmented button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+#car-picker button.on { color: #fff; }
+#view-summary .segmented { background: var(--card); }
+#view-summary .segmented button.on { background: var(--accent); color: #fff; }
+
+.result {
+  display: flex; gap: 12px; margin: 4px 0 14px;
+}
+.result > div, .totals > div {
+  flex: 1; text-align: center; padding: 12px 6px;
+  background: var(--accent-soft); border-radius: 12px;
+}
+.result strong, .totals strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.result small, .totals small { color: var(--muted); font-size: 12px; }
+.totals { display: flex; gap: 8px; }
+.totals strong { font-size: 20px; }
+
+.btn {
+  display: block; width: 100%; text-align: center;
+  font-size: 16px; font-weight: 600;
+  padding: 13px; margin-top: 8px;
+  border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.ghost { border-style: dashed; color: var(--accent); }
+.btn.icon { width: 44px; padding: 8px; margin: 0; font-size: 22px; line-height: 1; }
+.btn.small { display: inline-block; width: auto; padding: 6px 10px; margin: 0; font-size: 14px; }
+.btn.danger { color: var(--danger); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  border-radius: 999px; padding: 9px 14px; font-size: 15px;
+}
+.chip small { color: var(--muted); margin-left: 4px; }
+.empty { color: var(--muted); font-size: 14px; margin: 4px 0; }
+
+.period-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.period-nav span { font-weight: 600; text-transform: capitalize; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.list li:last-child { border-bottom: 0; }
+.list .grow { flex: 1; min-width: 0; }
+.list .sub { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .amount { text-align: right; font-variant-numeric: tabular-nums; }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+.car-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.car-row .bar-wrap { flex: 1; }
+.car-row .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.car-row .bar > div { height: 100%; }
+.car-row .nums { text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.car-setting { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.car-setting .name { flex: 1; font-weight: 600; }
+.car-setting input { width: 110px; }
+
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button {
+  flex: 1; border: 0; background: transparent; color: var(--muted);
+  padding: 8px 0 10px; font-size: 12px; font-weight: 600;
+}
+.tabbar button span { display: block; font-size: 22px; margin-bottom: 2px; filter: grayscale(1); opacity: .7; }
+.tabbar button.on { color: var(--accent); }
+.tabbar button.on span { filter: none; opacity: 1; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text); color: var(--bg);
+  padding: 10px 16px; border-radius: 999px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: .25s; z-index: 20;
+  max-width: calc(100% - 32px);
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
