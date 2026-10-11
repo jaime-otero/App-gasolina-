@@ -21,4 +21,5 @@ Es HTML, CSS y JS sin dependencias. Para probar en local:
 python3 -m http.server 8000
 ```
 
-Si cambias algún archivo, sube la versión de `CACHE` en `sw.js` para que el móvil descargue la nueva.
+Si cambias algún archivo, sube `VERSION` en `sw.js` y el `?v=` de `app.js` y `styles.css` en `index.html`
+(los tres al mismo número) para que el móvil descargue la versión nueva entera, sin mezclar archivos.

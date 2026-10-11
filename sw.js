@@ -1,11 +1,13 @@
 // Cachea la app para que funcione sin conexión.
-// Sube la versión cuando cambies algún archivo para que el móvil coja la nueva.
-const CACHE = 'gasolina-v4';
+// Al cambiar algún archivo, sube VERSION aquí y en index.html (?v=) para que
+// el móvil descargue todo nuevo a la vez y nunca mezcle archivos de versiones distintas.
+const VERSION = '5';
+const CACHE = `gasolina-v${VERSION}`;
 const FILES = [
   './',
   'index.html',
-  'styles.css',
-  'app.js',
+  `styles.css?v=${VERSION}`,
+  `app.js?v=${VERSION}`,
   'manifest.json',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -14,7 +16,11 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -25,16 +31,20 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Red primero (para coger cambios), caché si no hay conexión.
+// Red primero y saltándose la caché HTTP del navegador (GitHub Pages cachea 10 min),
+// así con conexión siempre se usa la última versión. Sin conexión, lo guardado en caché.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: 'no-cache' })
       .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
         return res;
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }))
+      .catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
   );
 });
