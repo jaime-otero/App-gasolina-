@@ -413,6 +413,58 @@ $('#import-file').addEventListener('change', async e => {
   }
 });
 
+// ---------- Deslizar hacia abajo para recargar ----------
+(function pullToRefresh() {
+  const el = $('#ptr');
+  const icon = el.querySelector('.ptr-icon');
+  const THRESHOLD = 70; // px que hay que bajar para recargar
+  let startY = null, dist = 0;
+
+  function place(d, anim) {
+    el.classList.toggle('anim', anim);
+    el.style.transform = `translateY(${d - 60}px)`;
+    el.style.opacity = Math.min(d / THRESHOLD, 1);
+  }
+
+  window.addEventListener('touchstart', e => {
+    // Solo si estamos arriba del todo y no se toca un campo de texto
+    if (window.scrollY > 0 || e.touches.length !== 1 || e.target.closest('input, textarea, select')) return;
+    startY = e.touches[0].clientY;
+    dist = 0;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', e => {
+    if (startY === null) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || window.scrollY > 0) { dist = 0; place(0, false); return; }
+    dist = Math.min(dy * 0.5, 120); // resistencia al tirar
+    if (e.cancelable) e.preventDefault(); // evita el rebote nativo mientras tiramos
+    place(dist, false);
+    el.classList.toggle('ready', dist >= THRESHOLD);
+    icon.textContent = '↓';
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    if (startY === null) return;
+    startY = null;
+    if (dist >= THRESHOLD) {
+      el.classList.remove('ready');
+      el.classList.add('loading');
+      icon.textContent = '↻';
+      place(THRESHOLD, true);
+      // Busca también una versión nueva de la app antes de recargar
+      const update = navigator.serviceWorker && navigator.serviceWorker.getRegistration
+        ? navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {})
+        : Promise.resolve();
+      Promise.race([update, new Promise(r => setTimeout(r, 1500))]).then(() => location.reload());
+    } else {
+      el.classList.remove('ready');
+      place(0, true);
+    }
+    dist = 0;
+  });
+})();
+
 // ---------- Inicio ----------
 function init() {
   renderCarPicker();
