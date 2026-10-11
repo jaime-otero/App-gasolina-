@@ -11,7 +11,6 @@ const DEFAULT_DATA = {
   ],
   routes: [], // { id, name, km, carId|null }
   trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note }
-  refuels: [], // { id, date, carId, odometer, liters, full }
 };
 
 function load() {
@@ -79,21 +78,21 @@ function toast(msg) {
 }
 
 // ---------- Navegación ----------
-const TITLES = { trip: 'Nuevo viaje', refuel: 'Repostar', summary: 'Resumen', settings: 'Ajustes' };
+const TITLES = { trip: 'Nuevo viaje', summary: 'Resumen', settings: 'Ajustes' };
 
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
-  $('#title').textContent = TITLES[name];
-  if (name === 'refuel') renderRefuels();
+  $('#title').textContent = name === 'trip' && editingId ? 'Editar viaje' : TITLES[name];
   if (name === 'summary') renderSummary();
   if (name === 'settings') renderSettings();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
 
-// ---------- Nuevo viaje ----------
+// ---------- Nuevo viaje / editar viaje ----------
 let selectedCar = state.cars[0].id;
+let editingId = null; // id del viaje que se está editando, o null si es nuevo
 
 function renderCarPicker(picker = $('#car-picker'), selected = selectedCar, onSelect = selectCar) {
   picker.innerHTML = '';
@@ -123,6 +122,31 @@ function updateResult() {
 }
 ['#trip-km', '#trip-cons'].forEach(s => $(s).addEventListener('input', updateResult));
 
+function setEditMode(trip) {
+  editingId = trip ? trip.id : null;
+  $('#trip-submit').textContent = trip ? 'Guardar cambios' : 'Guardar viaje';
+  $('#cancel-edit-btn').hidden = !trip;
+  $('#title').textContent = trip ? 'Editar viaje' : TITLES.trip;
+}
+
+function editTrip(trip) {
+  setEditMode(trip);
+  if (carById(trip.carId)) selectedCar = trip.carId;
+  renderCarPicker();
+  $('#trip-km').value = trip.km;
+  $('#trip-cons').value = trip.consumption;
+  $('#trip-date').value = trip.date;
+  $('#trip-note').value = trip.note || '';
+  updateResult();
+  showView('trip');
+}
+
+$('#cancel-edit-btn').addEventListener('click', () => {
+  setEditMode(null);
+  resetTripForm();
+  showView('summary');
+});
+
 function resetTripForm() {
   $('#trip-km').value = '';
   $('#trip-note').value = '';
@@ -137,14 +161,24 @@ $('#trip-form').addEventListener('submit', e => {
   const consumption = num($('#trip-cons').value);
   if (km <= 0) return toast('Pon los kilómetros');
   if (consumption <= 0) return toast('Pon el consumo');
-  const trip = {
-    id: uid(),
+  const fields = {
     date: $('#trip-date').value || todayISO(),
     carId: selectedCar,
     km,
     consumption,
     note: $('#trip-note').value.trim(),
   };
+  const existing = editingId && state.trips.find(t => t.id === editingId);
+  if (existing) {
+    Object.assign(existing, fields);
+    save();
+    toast(`Viaje actualizado: ${fmt(litersOf(existing))} L`);
+    setEditMode(null);
+    resetTripForm();
+    showView('summary');
+    return;
+  }
+  const trip = { id: uid(), ...fields };
   state.trips.push(trip);
   save();
   toast(`Guardado: ${fmt(litersOf(trip))} L`);
@@ -186,146 +220,6 @@ function renderRoutes() {
     b.innerHTML = `${escapeHTML(r.name)}<small>${fmt(r.km, 1)} km</small>`;
     b.addEventListener('click', () => applyRoute(r));
     list.appendChild(b);
-  }
-}
-
-// ---------- Repostajes ----------
-let refuelCar = state.cars[0].id;
-
-function refuelsOf(carId) {
-  return state.refuels.filter(r => r.carId === carId).sort((a, b) => a.odometer - b.odometer);
-}
-
-// Consumo real: entre dos repostajes con depósito lleno, los litros echados
-// (incluidos los parciales intermedios) son lo que se ha gastado en esos km.
-function realConsumption(carId) {
-  const intervals = [];
-  let lastFull = null;
-  let liters = 0;
-  for (const r of refuelsOf(carId)) {
-    liters += r.liters;
-    if (!r.full) continue;
-    if (lastFull && r.odometer > lastFull.odometer) {
-      const km = r.odometer - lastFull.odometer;
-      intervals.push({ km, liters, consumption: liters / km * 100, to: r });
-    }
-    lastFull = r;
-    liters = 0;
-  }
-  if (!intervals.length) return null;
-  const km = intervals.reduce((s, i) => s + i.km, 0);
-  const l = intervals.reduce((s, i) => s + i.liters, 0);
-  return { average: l / km * 100, last: intervals[intervals.length - 1].consumption, km, intervals };
-}
-
-function selectRefuelCar(id) {
-  refuelCar = id;
-  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
-  updateRefuelHint();
-}
-
-function updateRefuelHint() {
-  const list = refuelsOf(refuelCar);
-  const last = list[list.length - 1];
-  $('#refuel-odo-hint').textContent = last ? `${fmt(last.odometer, 0)}` : '—';
-  const odo = num($('#refuel-odo').value);
-  $('#refuel-since').textContent = last && odo > last.odometer ? fmt(odo - last.odometer, 0) : '—';
-}
-$('#refuel-odo').addEventListener('input', updateRefuelHint);
-
-function resetRefuelForm() {
-  $('#refuel-odo').value = '';
-  $('#refuel-liters').value = '';
-  $('#refuel-date').value = todayISO();
-  $('#refuel-full').checked = true;
-  updateRefuelHint();
-}
-
-$('#refuel-form').addEventListener('submit', e => {
-  e.preventDefault();
-  const odometer = num($('#refuel-odo').value);
-  const liters = num($('#refuel-liters').value);
-  if (odometer <= 0) return toast('Pon el cuentakilómetros');
-  if (liters <= 0) return toast('Pon los litros');
-  if (refuelsOf(refuelCar).some(r => r.odometer === odometer)) return toast('Ya hay un repostaje con ese cuentakilómetros');
-  state.refuels.push({
-    id: uid(),
-    date: $('#refuel-date').value || todayISO(),
-    carId: refuelCar,
-    odometer,
-    liters,
-    full: $('#refuel-full').checked,
-  });
-  save();
-  const real = realConsumption(refuelCar);
-  toast(real ? `Guardado · consumo real ${fmt(real.last, 1)} L/100 km` : 'Repostaje guardado');
-  resetRefuelForm();
-  renderRefuels();
-});
-
-function renderRefuels() {
-  renderCarPicker($('#refuel-car-picker'), refuelCar, selectRefuelCar);
-  updateRefuelHint();
-
-  // Consumo real por coche
-  const box = $('#real-consumption');
-  box.innerHTML = '';
-  for (const car of state.cars) {
-    const real = realConsumption(car.id);
-    const row = document.createElement('div');
-    row.className = 'real-row';
-    if (!real) {
-      row.innerHTML = `
-        <span class="dot" style="background:${car.color}"></span>
-        <div class="grow"><strong>${escapeHTML(car.name)}</strong>
-          <div class="sub">Faltan datos: necesitas 2 repostajes con depósito lleno</div></div>`;
-    } else {
-      const same = Math.abs(real.average - car.consumption) < 0.05;
-      row.innerHTML = `
-        <span class="dot" style="background:${car.color}"></span>
-        <div class="grow"><strong>${escapeHTML(car.name)}</strong>
-          <div class="sub">Último: ${fmt(real.last, 1)} · ${fmt(real.km, 0)} km medidos · usas ${fmt(car.consumption, 1)}</div></div>
-        <div class="big">${fmt(real.average, 1)}</div>
-        ${same ? '<span class="badge">en uso</span>' : '<button type="button" class="btn small">Usar</button>'}`;
-      const btn = row.querySelector('button');
-      if (btn) btn.addEventListener('click', () => {
-        car.consumption = Math.round(real.average * 10) / 10;
-        save();
-        if (car.id === selectedCar) $('#trip-cons').value = car.consumption;
-        updateResult();
-        renderRefuels();
-        toast(`${car.name}: ${fmt(car.consumption, 1)} L/100 km por defecto`);
-      });
-    }
-    box.appendChild(row);
-  }
-
-  // Lista de repostajes (más recientes primero)
-  const list = $('#refuel-list');
-  list.innerHTML = '';
-  const all = [...state.refuels].sort((a, b) => b.date.localeCompare(a.date) || b.odometer - a.odometer);
-  if (!all.length) {
-    list.innerHTML = '<li class="empty">Aún no hay repostajes.</li>';
-    return;
-  }
-  for (const r of all) {
-    const car = carById(r.carId) || { name: '?', color: 'var(--muted)' };
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <span class="dot" style="background:${car.color}"></span>
-      <div class="grow">
-        <div>${escapeHTML(car.name)}${r.full ? '' : ' <span class="badge">parcial</span>'}</div>
-        <div class="sub">${prettyDate(r.date)} · ${fmt(r.odometer, 0)} km</div>
-      </div>
-      <div class="amount">${fmt(r.liters)} L</div>
-      <button type="button" class="btn small danger" aria-label="Borrar">✕</button>`;
-    li.querySelector('button').addEventListener('click', () => {
-      if (!confirm('¿Borrar este repostaje?')) return;
-      state.refuels = state.refuels.filter(x => x.id !== r.id);
-      save();
-      renderRefuels();
-    });
-    list.appendChild(li);
   }
 }
 
@@ -419,9 +313,13 @@ function renderSummary() {
         <div class="sub">${prettyDate(t.date)}${t.note ? ' · ' + escapeHTML(t.note) : ''}</div>
       </div>
       <div class="amount">${fmt(litersOf(t))} L<br><span class="sub">${fmt(t.consumption, 1)} L/100</span></div>
-      <button type="button" class="btn small danger" aria-label="Borrar">✕</button>`;
-    li.querySelector('button').addEventListener('click', () => {
+      <button type="button" class="btn small" data-act="edit" aria-label="Editar">✎</button>
+      <button type="button" class="btn small danger" data-act="del" aria-label="Borrar">✕</button>`;
+    li.querySelector('.grow').addEventListener('click', () => editTrip(t));
+    li.querySelector('[data-act=edit]').addEventListener('click', () => editTrip(t));
+    li.querySelector('[data-act=del]').addEventListener('click', () => {
       if (!confirm('¿Borrar este viaje?')) return;
+      if (editingId === t.id) { setEditMode(null); resetTripForm(); }
       state.trips = state.trips.filter(x => x.id !== t.id);
       save();
       renderSummary();
@@ -502,13 +400,11 @@ $('#import-file').addEventListener('change', async e => {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.trips) || !Array.isArray(data.cars)) throw new Error('formato');
-    if (!Array.isArray(data.refuels)) data.refuels = [];
-    if (!confirm(`¿Importar ${data.trips.length} viajes y ${data.refuels.length} repostajes? Se reemplazarán los datos actuales.`)) return;
+    if (!confirm(`¿Importar ${data.trips.length} viajes? Se reemplazarán los datos actuales.`)) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     state = load();
     save();
     selectedCar = state.cars[0].id;
-    refuelCar = state.cars[0].id;
     init();
     renderSettings();
     toast('Datos importados');
@@ -522,7 +418,6 @@ function init() {
   renderCarPicker();
   renderRoutes();
   resetTripForm();
-  resetRefuelForm();
 }
 init();
 
