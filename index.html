@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↓</span></div>
@@ -27,6 +27,22 @@
       <form id="trip-form" class="card" autocomplete="off">
         <label class="field-label">Coche</label>
         <div id="car-picker" class="segmented car-picker"></div>
+
+        <label class="field-label">Ruta (opcional, para calcular los km)</label>
+        <div class="input-btn">
+          <input id="trip-from" type="text" placeholder="Desde (ej: Calle Mayor 1, Madrid)" enterkeyhint="next" aria-label="Desde">
+          <button type="button" id="locate-btn" class="btn icon" aria-label="Usar mi ubicación">📍</button>
+        </div>
+        <input id="trip-to" type="text" placeholder="Hasta (ej: Universidad Complutense)" enterkeyhint="search" aria-label="Hasta">
+        <div class="row route-actions">
+          <button type="button" id="calc-km-btn" class="btn">📏 Calcular km</button>
+          <button type="button" id="open-maps-btn" class="btn">🗺️ Ver en Mapas</button>
+        </div>
+
+        <div class="segmented" id="trip-kind">
+          <button type="button" data-round="0" class="on">➡️ Ida</button>
+          <button type="button" data-round="1">🔁 Ida y vuelta</button>
+        </div>
 
         <div class="row">
           <label class="field">
@@ -138,6 +154,14 @@
         <div id="cars-settings"></div>
       </div>
       <div class="card">
+        <h2>App de mapas</h2>
+        <p class="hint">La que se abre con «Ver en Mapas».</p>
+        <div class="segmented" id="maps-picker">
+          <button type="button" data-maps="apple">Apple Maps</button>
+          <button type="button" data-maps="google">Google Maps</button>
+        </div>
+      </div>
+      <div class="card">
         <h2>Viajes comunes</h2>
         <ul id="routes-settings" class="list"></ul>
       </div>
@@ -159,6 +183,6 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

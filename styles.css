@@ -207,3 +207,14 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .ptr.ready .ptr-icon { transform: rotate(180deg); }
 .ptr.loading .ptr-icon { animation: ptr-spin .8s linear infinite; }
 @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+/* Ruta: desde / hasta */
+.input-btn { display: flex; gap: 8px; margin-bottom: 8px; }
+.input-btn input { flex: 1; min-width: 0; }
+.input-btn .btn.icon { height: 46px; width: 46px; }
+#trip-to { margin-bottom: 0; }
+.route-actions { margin-bottom: 14px; }
+.route-actions .btn { font-size: 15px; padding: 11px 6px; }
+.btn:disabled { opacity: .5; }
+#maps-picker { margin-bottom: 0; }
+#maps-picker button.on { background: var(--accent); color: #fff; }
