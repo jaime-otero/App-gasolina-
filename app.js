@@ -9,10 +9,9 @@ const DEFAULT_DATA = {
     { id: 'mama', name: 'Mamá', consumption: 6.5, color: 'var(--car-mama)' },
     { id: 'rojo', name: 'Rojo', consumption: 6.5, color: 'var(--car-rojo)' },
   ],
-  defaultPrice: 1.55,
   routes: [], // { id, name, km, carId|null }
-  trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, price, note }
-  refuels: [], // { id, date, carId, odometer, liters, price, full }
+  trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note }
+  refuels: [], // { id, date, carId, odometer, liters, full }
 };
 
 function load() {
@@ -50,7 +49,6 @@ const num = v => {
 const fmt = (n, d = 2) => n.toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
 const carById = id => state.cars.find(c => c.id === id);
 const litersOf = t => t.km * t.consumption / 100;
-const eurosOf = t => litersOf(t) * (t.price || 0);
 
 function todayISO() {
   const d = new Date();
@@ -120,17 +118,15 @@ function selectCar(id) {
 }
 
 function updateResult() {
-  const t = { km: num($('#trip-km').value), consumption: num($('#trip-cons').value), price: num($('#trip-price').value) };
+  const t = { km: num($('#trip-km').value), consumption: num($('#trip-cons').value) };
   $('#res-liters').textContent = `${fmt(litersOf(t))} L`;
-  $('#res-euros').textContent = `${fmt(eurosOf(t))} €`;
 }
-['#trip-km', '#trip-cons', '#trip-price'].forEach(s => $(s).addEventListener('input', updateResult));
+['#trip-km', '#trip-cons'].forEach(s => $(s).addEventListener('input', updateResult));
 
 function resetTripForm() {
   $('#trip-km').value = '';
   $('#trip-note').value = '';
   $('#trip-date').value = todayISO();
-  $('#trip-price').value = state.defaultPrice;
   $('#trip-cons').value = carById(selectedCar).consumption;
   updateResult();
 }
@@ -147,12 +143,11 @@ $('#trip-form').addEventListener('submit', e => {
     carId: selectedCar,
     km,
     consumption,
-    price: num($('#trip-price').value),
     note: $('#trip-note').value.trim(),
   };
   state.trips.push(trip);
   save();
-  toast(`Guardado: ${fmt(litersOf(trip))} L · ${fmt(eurosOf(trip))} €`);
+  toast(`Guardado: ${fmt(litersOf(trip))} L`);
   resetTripForm();
 });
 
@@ -233,14 +228,14 @@ function updateRefuelHint() {
   const list = refuelsOf(refuelCar);
   const last = list[list.length - 1];
   $('#refuel-odo-hint').textContent = last ? `${fmt(last.odometer, 0)}` : '—';
-  $('#refuel-total').textContent = `${fmt(num($('#refuel-liters').value) * num($('#refuel-price').value))} €`;
+  const odo = num($('#refuel-odo').value);
+  $('#refuel-since').textContent = last && odo > last.odometer ? fmt(odo - last.odometer, 0) : '—';
 }
-['#refuel-liters', '#refuel-price'].forEach(s => $(s).addEventListener('input', updateRefuelHint));
+$('#refuel-odo').addEventListener('input', updateRefuelHint);
 
 function resetRefuelForm() {
   $('#refuel-odo').value = '';
   $('#refuel-liters').value = '';
-  $('#refuel-price').value = state.defaultPrice;
   $('#refuel-date').value = todayISO();
   $('#refuel-full').checked = true;
   updateRefuelHint();
@@ -250,7 +245,6 @@ $('#refuel-form').addEventListener('submit', e => {
   e.preventDefault();
   const odometer = num($('#refuel-odo').value);
   const liters = num($('#refuel-liters').value);
-  const price = num($('#refuel-price').value);
   if (odometer <= 0) return toast('Pon el cuentakilómetros');
   if (liters <= 0) return toast('Pon los litros');
   if (refuelsOf(refuelCar).some(r => r.odometer === odometer)) return toast('Ya hay un repostaje con ese cuentakilómetros');
@@ -260,15 +254,8 @@ $('#refuel-form').addEventListener('submit', e => {
     carId: refuelCar,
     odometer,
     liters,
-    price,
     full: $('#refuel-full').checked,
   });
-  // El último precio pagado pasa a ser el precio por defecto
-  if (price > 0) {
-    state.defaultPrice = price;
-    $('#trip-price').value = price;
-    updateResult();
-  }
   save();
   const real = realConsumption(refuelCar);
   toast(real ? `Guardado · consumo real ${fmt(real.last, 1)} L/100 km` : 'Repostaje guardado');
@@ -327,10 +314,10 @@ function renderRefuels() {
     li.innerHTML = `
       <span class="dot" style="background:${car.color}"></span>
       <div class="grow">
-        <div>${escapeHTML(car.name)} · ${fmt(r.liters)} L${r.full ? '' : ' <span class="badge">parcial</span>'}</div>
+        <div>${escapeHTML(car.name)}${r.full ? '' : ' <span class="badge">parcial</span>'}</div>
         <div class="sub">${prettyDate(r.date)} · ${fmt(r.odometer, 0)} km</div>
       </div>
-      <div class="amount">${fmt(r.liters * r.price)} €<br><span class="sub">${fmt(r.price, 3)} €/L</span></div>
+      <div class="amount">${fmt(r.liters)} L</div>
       <button type="button" class="btn small danger" aria-label="Borrar">✕</button>`;
     li.querySelector('button').addEventListener('click', () => {
       if (!confirm('¿Borrar este repostaje?')) return;
@@ -390,10 +377,9 @@ function renderSummary() {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
   const total = trips.reduce((acc, t) => {
-    acc.l += litersOf(t); acc.e += eurosOf(t); acc.km += t.km; return acc;
-  }, { l: 0, e: 0, km: 0 });
+    acc.l += litersOf(t); acc.km += t.km; return acc;
+  }, { l: 0, km: 0 });
   $('#sum-liters').textContent = fmt(total.l, 1);
-  $('#sum-euros').textContent = fmt(total.e);
   $('#sum-km').textContent = fmt(total.km, 0);
 
   // Por coche
@@ -402,7 +388,6 @@ function renderSummary() {
   for (const car of state.cars) {
     const ct = trips.filter(t => t.carId === car.id);
     const l = ct.reduce((s, t) => s + litersOf(t), 0);
-    const e = ct.reduce((s, t) => s + eurosOf(t), 0);
     const km = ct.reduce((s, t) => s + t.km, 0);
     const pct = total.l > 0 ? (l / total.l) * 100 : 0;
     const row = document.createElement('div');
@@ -413,7 +398,7 @@ function renderSummary() {
         <div><strong>${escapeHTML(car.name)}</strong> <span class="sub">· ${fmt(km, 0)} km</span></div>
         <div class="bar"><div style="width:${pct}%;background:${car.color}"></div></div>
       </div>
-      <div class="nums">${fmt(l, 1)} L<br><span class="sub">${fmt(e)} €</span></div>`;
+      <div class="nums">${fmt(l, 1)} L</div>`;
     byCar.appendChild(row);
   }
 
@@ -433,7 +418,7 @@ function renderSummary() {
         <div>${escapeHTML(car.name)} · ${fmt(t.km, 1)} km</div>
         <div class="sub">${prettyDate(t.date)}${t.note ? ' · ' + escapeHTML(t.note) : ''}</div>
       </div>
-      <div class="amount">${fmt(litersOf(t))} L<br><span class="sub">${fmt(eurosOf(t))} €</span></div>
+      <div class="amount">${fmt(litersOf(t))} L<br><span class="sub">${fmt(t.consumption, 1)} L/100</span></div>
       <button type="button" class="btn small danger" aria-label="Borrar">✕</button>`;
     li.querySelector('button').addEventListener('click', () => {
       if (!confirm('¿Borrar este viaje?')) return;
@@ -468,7 +453,6 @@ function renderSettings() {
     cars.appendChild(row);
   }
 
-  $('#default-price').value = state.defaultPrice;
 
   const routes = $('#routes-settings');
   routes.innerHTML = '';
@@ -501,16 +485,6 @@ function renderSettings() {
     routes.appendChild(li);
   }
 }
-
-$('#default-price').addEventListener('change', e => {
-  const v = num(e.target.value);
-  if (v <= 0) { e.target.value = state.defaultPrice; return toast('Precio no válido'); }
-  state.defaultPrice = v;
-  save();
-  $('#trip-price').value = v;
-  updateResult();
-  toast(`Precio: ${fmt(v, 3)} €/L`);
-});
 
 $('#export-btn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });

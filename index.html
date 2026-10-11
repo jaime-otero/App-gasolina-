@@ -37,16 +37,10 @@
           </label>
         </div>
 
-        <div class="row">
-          <label class="field">
-            <span>Fecha</span>
-            <input id="trip-date" type="date" required>
-          </label>
-          <label class="field">
-            <span>Precio (€/L)</span>
-            <input id="trip-price" type="number" inputmode="decimal" step="0.001" min="0">
-          </label>
-        </div>
+        <label class="field">
+          <span>Fecha</span>
+          <input id="trip-date" type="date" required>
+        </label>
 
         <label class="field">
           <span>Nota (opcional)</span>
@@ -54,8 +48,7 @@
         </label>
 
         <div class="result">
-          <div><strong id="res-liters">0,00 L</strong><small>gasolina</small></div>
-          <div><strong id="res-euros">0,00 €</strong><small>coste</small></div>
+          <div><strong id="res-liters">0,00 L</strong><small>gasolina gastada</small></div>
         </div>
 
         <button type="submit" class="btn primary">Guardar viaje</button>
@@ -81,21 +74,15 @@
             <input id="refuel-odo" type="number" inputmode="decimal" step="1" min="0" placeholder="Ej: 123456" required>
           </label>
           <label class="field">
-            <span>Fecha</span>
-            <input id="refuel-date" type="date" required>
-          </label>
-        </div>
-
-        <div class="row">
-          <label class="field">
             <span>Litros</span>
             <input id="refuel-liters" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required>
           </label>
-          <label class="field">
-            <span>Precio (€/L)</span>
-            <input id="refuel-price" type="number" inputmode="decimal" step="0.001" min="0">
-          </label>
         </div>
+
+        <label class="field">
+          <span>Fecha</span>
+          <input id="refuel-date" type="date" required>
+        </label>
 
         <label class="check">
           <input id="refuel-full" type="checkbox" checked>
@@ -104,8 +91,8 @@
         <p class="hint">Para calcular el consumo real, llena el depósito y apunta el cuentakilómetros cada vez.</p>
 
         <div class="result">
-          <div><strong id="refuel-total">0,00 €</strong><small>total</small></div>
           <div><strong id="refuel-odo-hint">—</strong><small>último cuentakm</small></div>
+          <div><strong id="refuel-since">—</strong><small>km desde entonces</small></div>
         </div>
 
         <button type="submit" class="btn primary">Guardar repostaje</button>
@@ -138,7 +125,6 @@
       </div>
       <div class="card totals">
         <div><strong id="sum-liters">0</strong><small>litros</small></div>
-        <div><strong id="sum-euros">0</strong><small>euros</small></div>
         <div><strong id="sum-km">0</strong><small>km</small></div>
       </div>
       <div class="card">
@@ -157,13 +143,6 @@
         <h2>Coches</h2>
         <p class="hint">Consumo predeterminado de cada coche (L/100 km).</p>
         <div id="cars-settings"></div>
-      </div>
-      <div class="card">
-        <h2>Precio de la gasolina</h2>
-        <label class="field">
-          <span>Precio por defecto (€/L)</span>
-          <input id="default-price" type="number" inputmode="decimal" step="0.001" min="0">
-        </label>
       </div>
       <div class="card">
         <h2>Viajes comunes</h2>
