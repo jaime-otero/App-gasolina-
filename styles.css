@@ -223,6 +223,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 }
 .suggest li { padding: 10px; border-radius: 8px; cursor: pointer; }
 .suggest li.on, .suggest li:active { background: var(--accent-soft); }
+.fav-btn { color: var(--muted); }
+.fav-btn.on { color: #eab308; }
 .suggest small { display: block; color: var(--muted); font-size: 13px; }
 .suggest li.suggest-by { padding: 4px 10px 2px; text-align: right; font-size: 11px; color: var(--muted); cursor: default; background: none; }
 .google-usage { margin: 8px 0 0; }
@@ -238,7 +240,7 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 12px; font-size: 14px; background: var(--card);
 }
-.route-map-foot span { color: var(--accent); font-weight: 600; }
+.route-map-foot span { color: var(--accent); font-weight: 600; white-space: nowrap; margin-left: 8px; }
 .route-map-foot small { margin-left: 6px; color: var(--muted); font-size: 12px; }
 .route-map-close {
   position: absolute; top: 8px; right: 8px; z-index: 1000;
