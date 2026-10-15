@@ -67,7 +67,7 @@ main { padding: 0 16px 16px; max-width: 560px; margin: 0 auto; }
 .field-label, .field span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .field { display: block; margin-bottom: 12px; flex: 1; min-width: 0; }
 .row { display: flex; gap: 12px; }
-input[type=number], input[type=text], input[type=date] {
+input[type=number], input[type=text], input[type=date], input[type=password] {
   width: 100%;
   font-size: 17px; /* >=16px evita el zoom de iOS */
   padding: 11px 12px;
@@ -224,6 +224,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .suggest li { padding: 10px; border-radius: 8px; cursor: pointer; }
 .suggest li.on, .suggest li:active { background: var(--accent-soft); }
 .suggest small { display: block; color: var(--muted); font-size: 13px; }
+.suggest li.suggest-by { padding: 4px 10px 2px; text-align: right; font-size: 11px; color: var(--muted); cursor: default; background: none; }
+.google-usage { margin: 8px 0 0; }
 #trip-to { margin-bottom: 0; }
 /* Ventanita con el mapa de la ruta */
 .route-map {
@@ -237,6 +239,7 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   padding: 9px 12px; font-size: 14px; background: var(--card);
 }
 .route-map-foot span { color: var(--accent); font-weight: 600; }
+.route-map-foot small { margin-left: 6px; color: var(--muted); font-size: 12px; }
 .route-map-close {
   position: absolute; top: 8px; right: 8px; z-index: 1000;
   width: 32px; height: 32px; border: 0; border-radius: 50%; padding: 0;
