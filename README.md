@@ -13,6 +13,8 @@ Web app (PWA) para el iPhone que calcula cuánta gasolina gastas en cada viaje c
 - **Google (opcional)**: con una clave de Google en Ajustes, las sugerencias (también de sitios concretos, como restaurantes) salen de Places API (New)
   y los km de Routes API, como en Google Maps. La clave se guarda solo en el móvil y no va en las copias. La app pone un tope propio
   de 50 rutas y 200 búsquedas al día, muy por debajo de lo gratis al mes; al llegar a él, o si Google falla, vuelve a OpenStreetMap.
+- **Lugares favoritos**: con ☆ junto a *Desde* o *Hasta* se guarda el sitio (Casa, Uni…). Al tocar un campo vacío salen los favoritos,
+  y al escribir salen primero los que encajan. Se renombran o borran en Ajustes.
 - **Ida / Ida y vuelta**: si los km se calculan con el mapa, la vuelta se calcula como su propia ruta (no siempre mide lo mismo que la ida)
   y en el mapa sale en discontinua. Si los km se ponen a mano, con un toque se duplican (o se vuelven a dividir).
 - **Ver en Mapas**: abre la ruta en Apple Maps o Google Maps (se elige en Ajustes), también desde cada viaje del resumen.

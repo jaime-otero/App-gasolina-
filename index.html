@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↓</span></div>
@@ -30,12 +30,14 @@
 
         <label class="field-label">Ruta (opcional, para calcular los km)</label>
         <div class="input-btn ac">
-          <input id="trip-from" type="text" placeholder="Desde (ej: Calle Mayor 1, Madrid)" enterkeyhint="next" aria-label="Desde">
+          <input id="trip-from" type="text" placeholder="Desde (calle o sitio)" enterkeyhint="next" aria-label="Desde">
           <button type="button" id="locate-btn" class="btn icon" aria-label="Usar mi ubicación">📍</button>
+          <button type="button" id="fav-from-btn" class="btn icon fav-btn" aria-label="Guardar en favoritos">☆</button>
           <ul id="trip-from-suggest" class="suggest" role="listbox" hidden></ul>
         </div>
-        <div class="ac">
-          <input id="trip-to" type="text" placeholder="Hasta (ej: Universidad Complutense)" enterkeyhint="search" aria-label="Hasta">
+        <div class="input-btn ac">
+          <input id="trip-to" type="text" placeholder="Hasta (calle o sitio)" enterkeyhint="search" aria-label="Hasta">
+          <button type="button" id="fav-to-btn" class="btn icon fav-btn" aria-label="Guardar en favoritos">☆</button>
           <ul id="trip-to-suggest" class="suggest" role="listbox" hidden></ul>
         </div>
         <div class="row route-actions">
@@ -188,6 +190,10 @@
         <p class="hint google-usage" id="google-usage"></p>
       </div>
       <div class="card">
+        <h2>Lugares favoritos</h2>
+        <ul id="places-settings" class="list"></ul>
+      </div>
+      <div class="card">
         <h2>Viajes comunes</h2>
         <ul id="routes-settings" class="list"></ul>
       </div>
@@ -209,6 +215,6 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

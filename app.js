@@ -12,6 +12,7 @@ const DEFAULT_DATA = {
   routes: [], // { id, name, km, carId|null, from, to, roundTrip }
   trips: [],  // { id, date:'YYYY-MM-DD', carId, km, consumption, note, from, to, roundTrip }
   refuels: [], // { id, date:'YYYY-MM-DD', carId, liters, note }
+  places: [], // lugares favoritos: { id, name, label, place: {placeId} | {lat, lon} | null }
   mapsApp: /iPhone|iPad|Macintosh/.test(navigator.userAgent) ? 'apple' : 'google',
 };
 
@@ -281,6 +282,7 @@ function setRouteFields(from, to) {
   fromPlace = toPlace = null;
   legs = null;
   hideRouteMap();
+  updateFavButtons();
 }
 $('#trip-from').addEventListener('input', () => { fromPlace = null; legs = null; hideRouteMap(); });
 $('#trip-to').addEventListener('input', () => { toPlace = null; legs = null; hideRouteMap(); });
@@ -438,32 +440,50 @@ function setupSuggest(input, list, onPick) {
   };
   const pick = s => {
     input.value = s.label;
-    onPick(s.point);
+    onPick(s.point || null);
     placesSession = null;
     close();
+    updateFavButtons();
   };
-  input.addEventListener('input', () => {
+  const show = next => {
+    items = next;
+    if (document.activeElement !== input || !items.length) return close();
+    list.innerHTML = items.map(s =>
+      `<li role="option"${s.fav ? ' class="fav"' : ''}>${escapeHTML(s.main)}${s.detail ? `<small>${escapeHTML(s.detail)}</small>` : ''}</li>`).join('');
+    [...list.children].forEach((li, i) => {
+      // pointerdown + preventDefault para que el campo no pierda el foco antes del toque
+      li.addEventListener('pointerdown', e => { e.preventDefault(); pick(items[i]); });
+    });
+    if (items.some(s => s.google)) list.insertAdjacentHTML('beforeend', '<li class="suggest-by" aria-hidden="true">con Google</li>');
+    active = -1;
+    list.hidden = false;
+  };
+  // Favoritos que encajan con lo escrito (todos si el campo está vacío)
+  const favItems = text => {
+    const t = text.toLowerCase();
+    return state.places
+      .filter(f => !t || f.name.toLowerCase().includes(t) || f.label.toLowerCase().includes(t))
+      .map(f => ({ main: `⭐ ${f.name}`, detail: f.label !== f.name ? f.label : '', label: f.label, point: f.place, fav: true }));
+  };
+  const refresh = () => {
     clearTimeout(timer);
     ctrl?.abort();
     const text = input.value.trim();
-    if (text.length < 3 || !navigator.onLine) return close();
+    const favs = favItems(text);
+    if (text.length < 3 || !navigator.onLine) return show(favs);
+    show(favs);
     timer = setTimeout(async () => {
       ctrl = new AbortController();
+      let found;
       try {
-        items = await suggestPlaces(text, ctrl.signal);
-      } catch { return; /* sin conexión o cancelada: sin sugerencias */ }
-      if (document.activeElement !== input || !items.length) return close();
-      list.innerHTML = items.map(s =>
-        `<li role="option">${escapeHTML(s.main)}${s.detail ? `<small>${escapeHTML(s.detail)}</small>` : ''}</li>`).join('');
-      [...list.children].forEach((li, i) => {
-        // pointerdown + preventDefault para que el campo no pierda el foco antes del toque
-        li.addEventListener('pointerdown', e => { e.preventDefault(); pick(items[i]); });
-      });
-      if (items[0].google) list.insertAdjacentHTML('beforeend', '<li class="suggest-by" aria-hidden="true">con Google</li>');
-      active = -1;
-      list.hidden = false;
+        found = await suggestPlaces(text, ctrl.signal);
+      } catch { return; /* sin conexión o cancelada: se quedan los favoritos */ }
+      const seen = new Set(favs.map(f => f.label));
+      show([...favs, ...found.filter(s => !seen.has(s.label))]);
     }, 300);
-  });
+  };
+  input.addEventListener('input', refresh);
+  input.addEventListener('focus', () => { if (!input.value.trim()) refresh(); });
   input.addEventListener('keydown', e => {
     if (list.hidden) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -478,8 +498,38 @@ function setupSuggest(input, list, onPick) {
   });
   input.addEventListener('blur', () => { clearTimeout(timer); ctrl?.abort(); close(); });
 }
-setupSuggest($('#trip-from'), $('#trip-from-suggest'), p => { fromPlace = p; });
-setupSuggest($('#trip-to'), $('#trip-to-suggest'), p => { toPlace = p; });
+setupSuggest($('#trip-from'), $('#trip-from-suggest'), p => { fromPlace = p; legs = null; hideRouteMap(); });
+setupSuggest($('#trip-to'), $('#trip-to-suggest'), p => { toPlace = p; legs = null; hideRouteMap(); });
+
+// ---------- Lugares favoritos ----------
+// Se guarda el texto del campo y, si lo hay, el sitio exacto (de Google solo su id,
+// que se puede guardar sin límite; de OpenStreetMap o de «📍», las coordenadas).
+const favOf = label => state.places.find(f => f.label.toLowerCase() === label.trim().toLowerCase());
+
+function updateFavButtons() {
+  for (const [btn, input] of [[$('#fav-from-btn'), $('#trip-from')], [$('#fav-to-btn'), $('#trip-to')]]) {
+    const on = !!(input.value.trim() && favOf(input.value));
+    btn.textContent = on ? '★' : '☆';
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-label', on ? 'Ya está en favoritos' : 'Guardar en favoritos');
+  }
+}
+
+function saveFavorite(input, place) {
+  const label = input.value.trim();
+  if (!label) return toast('Escribe o elige un sitio primero');
+  const existing = favOf(label);
+  if (existing) return toast(`Ya está en favoritos como «${existing.name}»`);
+  const name = prompt('Nombre del favorito (ej: Casa, Uni)', label.split(',')[0]);
+  if (!name || !name.trim()) return;
+  state.places.push({ id: uid(), name: name.trim(), label, place: place || null });
+  save();
+  updateFavButtons();
+  toast(`⭐ ${name.trim()} guardado`);
+}
+$('#fav-from-btn').addEventListener('click', () => saveFavorite($('#trip-from'), fromPlace));
+$('#fav-to-btn').addEventListener('click', () => saveFavorite($('#trip-to'), toPlace));
+['#trip-from', '#trip-to'].forEach(s => $(s).addEventListener('input', updateFavButtons));
 
 function busy(btn, label) {
   const old = btn.textContent;
@@ -497,6 +547,9 @@ $('#locate-btn').addEventListener('click', () => {
     try { label = await reverseGeocode(point); } catch { /* sin conexión: basta con las coordenadas */ }
     $('#trip-from').value = label;
     fromPlace = point;
+    legs = null;
+    hideRouteMap();
+    updateFavButtons();
     done();
     $('#trip-to').focus();
   }, () => {
@@ -1029,6 +1082,34 @@ function renderSettings() {
   $('#google-usage').textContent = googleKey()
     ? `Hoy: ${gc.routes}/${GOOGLE_LIMITS.routes} rutas y ${gc.places}/${GOOGLE_LIMITS.places} búsquedas. Al llegar al tope se usa OpenStreetMap hasta mañana.`
     : 'Sin clave: se usa OpenStreetMap.';
+
+  const favs = $('#places-settings');
+  favs.innerHTML = '';
+  if (!state.places.length) {
+    favs.innerHTML = '<li class="empty">Aún no hay favoritos. Guárdalos con ☆ junto a «Desde» o «Hasta».</li>';
+  }
+  for (const f of state.places) {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="grow">
+        <div>⭐ ${escapeHTML(f.name)}</div>
+        <div class="sub">${escapeHTML(f.label)}</div>
+      </div>
+      <button type="button" class="btn small" data-act="edit">Renombrar</button>
+      <button type="button" class="btn small danger" data-act="del" aria-label="Borrar">✕</button>`;
+    li.querySelector('[data-act=edit]').addEventListener('click', () => {
+      const name = prompt('Nombre', f.name);
+      if (!name || !name.trim()) return;
+      f.name = name.trim();
+      save(); renderSettings();
+    });
+    li.querySelector('[data-act=del]').addEventListener('click', () => {
+      if (!confirm(`¿Borrar el favorito «${f.name}»?`)) return;
+      state.places = state.places.filter(x => x.id !== f.id);
+      save(); renderSettings(); updateFavButtons();
+    });
+    favs.appendChild(li);
+  }
 
   const routes = $('#routes-settings');
   routes.innerHTML = '';
