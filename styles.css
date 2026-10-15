@@ -238,7 +238,7 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 12px; font-size: 14px; background: var(--card);
 }
-.route-map-foot span { color: var(--accent); font-weight: 600; }
+.route-map-foot span { color: var(--accent); font-weight: 600; white-space: nowrap; margin-left: 8px; }
 .route-map-foot small { margin-left: 6px; color: var(--muted); font-size: 12px; }
 .route-map-close {
   position: absolute; top: 8px; right: 8px; z-index: 1000;

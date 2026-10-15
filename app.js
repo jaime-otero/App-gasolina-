@@ -124,18 +124,28 @@ function updateResult() {
   $('#res-liters').textContent = `${fmt(litersOf(t))} L`;
 }
 ['#trip-km', '#trip-cons'].forEach(s => $(s).addEventListener('input', updateResult));
+// km a mano: ya no son los del mapa
+$('#trip-km').addEventListener('input', () => { legs = null; hideRouteMap(); });
 
-// Ida / ida y vuelta. Los km del formulario son siempre el total del viaje:
-// al cambiar de modo se duplican o se dividen entre dos.
+// Ida / ida y vuelta. Los km del formulario son siempre el total del viaje.
+// Si se calcularon con el mapa, la vuelta es su propia ruta (puede no medir lo mismo);
+// si se pusieron a mano, al cambiar de modo se duplican o se dividen entre dos.
 let roundTrip = false;
 function setRoundTrip(on, adjustKm = false) {
   on = !!on;
-  if (adjustKm && on !== roundTrip) {
-    const km = num($('#trip-km').value);
-    if (km > 0) $('#trip-km').value = Math.round((on ? km * 2 : km / 2) * 10) / 10;
-  }
+  const changed = on !== roundTrip;
   roundTrip = on;
   document.querySelectorAll('#trip-kind button').forEach(b => b.classList.toggle('on', (b.dataset.round === '1') === on));
+  if (adjustKm && changed) {
+    if (legs && (!on || legs.back)) {
+      showLegs();
+    } else {
+      const km = num($('#trip-km').value);
+      if (km > 0) $('#trip-km').value = Math.round((on ? km * 2 : km / 2) * 10) / 10;
+      // Falta la vuelta: de momento ×2, y se cambia por la de verdad si se puede calcular
+      if (legs) calcKm();
+    }
+  }
   updateResult();
 }
 document.querySelectorAll('#trip-kind button').forEach(b =>
@@ -261,15 +271,19 @@ const routeText = r => [r.from, r.to].filter(Boolean).join(' → ');
 // de Google, { placeId }. Vale mientras no se cambie el texto del campo.
 let fromPlace = null;
 let toPlace = null;
+// Rutas calculadas para los campos actuales: { go, back|null }. Se olvidan al cambiar
+// Desde, Hasta o los km a mano.
+let legs = null;
 
 function setRouteFields(from, to) {
   $('#trip-from').value = from || '';
   $('#trip-to').value = to || '';
   fromPlace = toPlace = null;
+  legs = null;
   hideRouteMap();
 }
-$('#trip-from').addEventListener('input', () => { fromPlace = null; hideRouteMap(); });
-$('#trip-to').addEventListener('input', () => { toPlace = null; hideRouteMap(); });
+$('#trip-from').addEventListener('input', () => { fromPlace = null; legs = null; hideRouteMap(); });
+$('#trip-to').addEventListener('input', () => { toPlace = null; legs = null; hideRouteMap(); });
 
 // ---------- Google (opcional) ----------
 // La clave va aparte de los datos para que no salga en las copias exportadas.
@@ -491,35 +505,59 @@ $('#locate-btn').addEventListener('click', () => {
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
 });
 
+// Error con un mensaje que se puede enseñar tal cual
+const routeError = msg => Object.assign(new Error(msg), { shown: true });
+
+// Ruta en coche de a hasta b ({ text, place }): con Google si se puede, si no con OSRM
+async function findRoute(a, b) {
+  if (useGoogle('routes')) {
+    try {
+      const route = await googleRoute(a.place || { address: a.text }, b.place || { address: b.text });
+      if (route) return route;
+    } catch { /* falla Google: se calcula con OpenStreetMap */ }
+  }
+  const pa = a.place?.lat != null ? a.place : await geocode(a.text);
+  if (!pa) throw routeError(`No encuentro «${a.text}»`);
+  const pb = b.place?.lat != null ? b.place : await geocode(b.text);
+  if (!pb) throw routeError(`No encuentro «${b.text}»`);
+  const route = await drivingRoute(pa, pb);
+  if (!route) throw routeError('No hay ruta en coche entre esos sitios');
+  return route;
+}
+
+// Pone en el formulario y en el mapa los km de las rutas calculadas; devuelve el total
+function showLegs() {
+  const back = roundTrip ? legs.back : null;
+  const total = legs.go.km + (back ? back.km : 0);
+  $('#trip-km').value = Math.round(total * 10) / 10;
+  updateResult();
+  showRouteMap(legs.go, back);
+  return total;
+}
+
 async function calcKm() {
+  const btn = $('#calc-km-btn');
+  if (btn.disabled) return; // ya se está calculando
   const from = $('#trip-from').value.trim();
   const to = $('#trip-to').value.trim();
   if (!from || !to) return toast('Pon desde dónde y hasta dónde');
   if (!navigator.onLine) return toast('Sin conexión: pon los km a mano');
-  const done = busy($('#calc-km-btn'), '⏳ Calculando…');
+  const done = busy(btn, '⏳ Calculando…');
   try {
-    let route = null;
-    if (useGoogle('routes')) {
-      try {
-        route = await googleRoute(fromPlace || { address: from }, toPlace || { address: to });
-      } catch { /* falla Google: se calcula con OpenStreetMap */ }
-    }
-    if (!route) {
-      const a = fromPlace?.lat != null ? fromPlace : await geocode(from);
-      if (!a) return toast(`No encuentro «${from}»`);
-      const b = toPlace?.lat != null ? toPlace : await geocode(to);
-      if (!b) return toast(`No encuentro «${to}»`);
-      route = await drivingRoute(a, b);
-      if (!route) return toast('No hay ruta en coche entre esos sitios');
-    }
-    const { km } = route;
-    showRouteMap(route);
-    const total = roundTrip ? km * 2 : km;
-    $('#trip-km').value = Math.round(total * 10) / 10;
-    updateResult();
-    toast(roundTrip ? `${fmt(km, 1)} km × 2 = ${fmt(total, 1)} km` : `${fmt(km, 1)} km por carretera`);
-  } catch {
-    toast('No se pudo calcular: pon los km a mano');
+    const a = { text: from, place: fromPlace };
+    const b = { text: to, place: toPlace };
+    // Si la ida ya está calculada para estos mismos campos, no se vuelve a pedir
+    // Cada trayecto a una décima, para que ida + vuelta cuadre con lo que se ve
+    const leg = route => ({ ...route, km: Math.round(route.km * 10) / 10 });
+    const go = legs?.go || leg(await findRoute(a, b));
+    const back = roundTrip ? legs?.back || leg(await findRoute(b, a)) : legs?.back || null;
+    legs = { go, back };
+    const total = showLegs();
+    toast(roundTrip
+      ? `Ida ${fmt(go.km, 1)} + vuelta ${fmt(back.km, 1)} = ${fmt(total, 1)} km`
+      : `${fmt(go.km, 1)} km por carretera`);
+  } catch (e) {
+    toast(e.shown ? e.message : 'No se pudo calcular: pon los km a mano');
   } finally {
     done();
   }
@@ -580,16 +618,20 @@ function hideRouteMap() {
   $('#route-map-box').hidden = true;
 }
 
-async function showRouteMap({ coords, km, source }) {
+// Ida en línea continua y, si la hay, vuelta en discontinua de otro color
+async function showRouteMap(go, back = null) {
   const token = ++routeMapToken;
-  if (coords.length < 2) return hideRouteMap();
+  if (go.coords.length < 2) return hideRouteMap();
   let L;
   try { L = await loadLeaflet(); } catch { return; /* sin mapa: los km ya están */ }
   if (token !== routeMapToken) return;
   const box = $('#route-map-box');
   box.hidden = false;
-  $('#route-map-km').textContent = `${fmt(km, 1)} km`;
-  $('#route-map-src').textContent = `Ruta: ${source}`;
+  $('#route-map-km').textContent = `${fmt(go.km + (back ? back.km : 0), 1)} km`;
+  const sources = [...new Set([go.source, back?.source].filter(Boolean))].join(' y ');
+  $('#route-map-src').textContent = back
+    ? `ida ${fmt(go.km, 1)} · vuelta ${fmt(back.km, 1)} · ${sources}`
+    : `Ruta: ${sources}`;
   if (!routeMap) {
     // Solo para mirar: así no se engancha al hacer scroll. Al tocarlo se abre en Mapas.
     routeMap = L.map('route-map', {
@@ -604,12 +646,17 @@ async function showRouteMap({ coords, km, source }) {
   routeLayer?.remove();
   const css = getComputedStyle(document.documentElement);
   const accent = css.getPropertyValue('--accent').trim() || '#0f766e';
-  const latlngs = coords.map(([lon, lat]) => [lat, lon]);
-  const line = L.polyline(latlngs, { color: accent, weight: 5, opacity: .9 });
+  const toLatLngs = coords => coords.map(([lon, lat]) => [lat, lon]);
+  const latlngs = toLatLngs(go.coords);
+  const lines = [L.polyline(latlngs, { color: accent, weight: 5, opacity: .9 })];
+  if (back?.coords.length > 1) {
+    const color = css.getPropertyValue('--spent').trim() || '#ea580c';
+    lines.push(L.polyline(toLatLngs(back.coords), { color, weight: 4, opacity: .9, dashArray: '8 8' }));
+  }
   const dot = (p, fill) => L.circleMarker(p, { radius: 7, color: '#fff', weight: 3, fillColor: fill, fillOpacity: 1 });
-  routeLayer = L.layerGroup([line, dot(latlngs[0], accent), dot(latlngs[latlngs.length - 1], css.getPropertyValue('--danger').trim() || '#b91c1c')]).addTo(routeMap);
+  routeLayer = L.layerGroup([...lines, dot(latlngs[0], accent), dot(latlngs[latlngs.length - 1], css.getPropertyValue('--danger').trim() || '#b91c1c')]).addTo(routeMap);
   routeMap.invalidateSize();
-  routeMap.fitBounds(line.getBounds(), { padding: [24, 24] });
+  routeMap.fitBounds(L.featureGroup(lines).getBounds(), { padding: [24, 24] });
 }
 
 $('#route-map-box').addEventListener('click', openFormInMaps);
