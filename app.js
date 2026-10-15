@@ -265,9 +265,10 @@ function setRouteFields(from, to) {
   $('#trip-from').value = from || '';
   $('#trip-to').value = to || '';
   fromCoords = toCoords = null;
+  hideRouteMap();
 }
-$('#trip-from').addEventListener('input', () => { fromCoords = null; });
-$('#trip-to').addEventListener('input', () => { toCoords = null; });
+$('#trip-from').addEventListener('input', () => { fromCoords = null; hideRouteMap(); });
+$('#trip-to').addEventListener('input', () => { toCoords = null; hideRouteMap(); });
 
 async function getJSON(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -297,11 +298,13 @@ async function reverseGeocode({ lat, lon }) {
   return [street, town].filter(Boolean).join(', ') || display_name;
 }
 
-async function drivingKm(a, b) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+// Distancia por carretera y el trazado de la ruta ([lon, lat] por punto) para el mapa
+async function drivingRoute(a, b) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
   const data = await getJSON(url);
   if (data.code !== 'Ok' || !data.routes.length) return null;
-  return data.routes[0].distance / 1000;
+  const [r] = data.routes;
+  return { km: r.distance / 1000, coords: r.geometry.coordinates };
 }
 
 // Sugerencias mientras se escribe, con Photon (OpenStreetMap): gratis y sin clave
@@ -412,8 +415,10 @@ async function calcKm() {
     if (!a) return toast(`No encuentro «${from}»`);
     const b = toCoords || await geocode(to);
     if (!b) return toast(`No encuentro «${to}»`);
-    const km = await drivingKm(a, b);
-    if (km == null) return toast('No hay ruta en coche entre esos sitios');
+    const route = await drivingRoute(a, b);
+    if (!route) return toast('No hay ruta en coche entre esos sitios');
+    const { km } = route;
+    showRouteMap(route.coords, km);
     const total = roundTrip ? km * 2 : km;
     $('#trip-km').value = Math.round(total * 10) / 10;
     updateResult();
@@ -442,11 +447,76 @@ function openMaps(from, to) {
     : `https://www.google.com/maps/dir/?api=1${from ? `&origin=${q(from)}` : ''}&destination=${q(to)}&travelmode=driving`;
   window.open(url, '_blank');
 }
-$('#open-maps-btn').addEventListener('click', () => {
+function openFormInMaps() {
   // Con «📍» se manda la posición exacta en vez del texto aproximado
   const from = fromCoords ? `${fromCoords.lat},${fromCoords.lon}` : $('#trip-from').value.trim();
   openMaps(from, $('#trip-to').value.trim());
-});
+}
+$('#open-maps-btn').addEventListener('click', openFormInMaps);
+
+// Ventanita con el mapa de la ruta tras «Calcular km». Usa Leaflet con mapas de
+// OpenStreetMap: gratis y sin clave. Se carga solo la primera vez que hace falta.
+const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+let leafletLoading = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  return leafletLoading ||= new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = LEAFLET + 'leaflet.min.css';
+    css.integrity = 'sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==';
+    css.crossOrigin = 'anonymous';
+    const js = document.createElement('script');
+    js.src = LEAFLET + 'leaflet.min.js';
+    js.integrity = 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==';
+    js.crossOrigin = 'anonymous';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => { leafletLoading = null; js.remove(); reject(new Error('leaflet')); };
+    document.head.append(css, js);
+  });
+}
+
+let routeMap = null;
+let routeLayer = null;
+let routeMapToken = 0; // descarta un mapa que llega tarde si la ruta ya cambió
+
+function hideRouteMap() {
+  routeMapToken++;
+  $('#route-map-box').hidden = true;
+}
+
+async function showRouteMap(coords, km) {
+  const token = ++routeMapToken;
+  let L;
+  try { L = await loadLeaflet(); } catch { return; /* sin mapa: los km ya están */ }
+  if (token !== routeMapToken) return;
+  const box = $('#route-map-box');
+  box.hidden = false;
+  $('#route-map-km').textContent = `${fmt(km, 1)} km`;
+  if (!routeMap) {
+    // Solo para mirar: así no se engancha al hacer scroll. Al tocarlo se abre en Mapas.
+    routeMap = L.map('route-map', {
+      zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false,
+      doubleClickZoom: false, boxZoom: false, keyboard: false,
+    });
+    routeMap.attributionControl.setPrefix(false);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap',
+    }).addTo(routeMap);
+  }
+  routeLayer?.remove();
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--accent').trim() || '#0f766e';
+  const latlngs = coords.map(([lon, lat]) => [lat, lon]);
+  const line = L.polyline(latlngs, { color: accent, weight: 5, opacity: .9 });
+  const dot = (p, fill) => L.circleMarker(p, { radius: 7, color: '#fff', weight: 3, fillColor: fill, fillOpacity: 1 });
+  routeLayer = L.layerGroup([line, dot(latlngs[0], accent), dot(latlngs[latlngs.length - 1], css.getPropertyValue('--danger').trim() || '#b91c1c')]).addTo(routeMap);
+  routeMap.invalidateSize();
+  routeMap.fitBounds(line.getBounds(), { padding: [24, 24] });
+}
+
+$('#route-map-box').addEventListener('click', openFormInMaps);
+$('#route-map-close').addEventListener('click', e => { e.stopPropagation(); hideRouteMap(); });
 
 document.querySelectorAll('#maps-picker button').forEach(b => b.addEventListener('click', () => {
   state.mapsApp = b.dataset.maps;

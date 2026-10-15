@@ -225,6 +225,25 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .suggest li.on, .suggest li:active { background: var(--accent-soft); }
 .suggest small { display: block; color: var(--muted); font-size: 13px; }
 #trip-to { margin-bottom: 0; }
+/* Ventanita con el mapa de la ruta */
+.route-map {
+  position: relative; isolation: isolate; /* las capas de Leaflet no tapan las sugerencias */
+  margin: 0 0 14px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg); cursor: pointer;
+}
+#route-map { height: 180px; background: var(--bg); }
+.route-map-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 12px; font-size: 14px; background: var(--card);
+}
+.route-map-foot span { color: var(--accent); font-weight: 600; }
+.route-map-close {
+  position: absolute; top: 8px; right: 8px; z-index: 1000;
+  width: 32px; height: 32px; border: 0; border-radius: 50%; padding: 0;
+  background: var(--card); color: var(--text); font-size: 15px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.route-map .leaflet-control-attribution { font-size: 10px; }
 .route-actions { margin-bottom: 14px; }
 .route-actions .btn { font-size: 15px; padding: 11px 6px; }
 .btn:disabled { opacity: .5; }

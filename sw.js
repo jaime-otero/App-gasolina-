@@ -1,7 +1,7 @@
 // Cachea la app para que funcione sin conexión.
 // Al cambiar algún archivo, sube VERSION aquí y en index.html (?v=) para que
 // el móvil descargue todo nuevo a la vez y nunca mezcle archivos de versiones distintas.
-const VERSION = '10';
+const VERSION = '11';
 const CACHE = `gasolina-v${VERSION}`;
 const FILES = [
   './',
