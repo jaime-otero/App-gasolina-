@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↓</span></div>
@@ -41,6 +41,11 @@
         <div class="row route-actions">
           <button type="button" id="calc-km-btn" class="btn">📏 Calcular km</button>
           <button type="button" id="open-maps-btn" class="btn">🗺️ Ver en Mapas</button>
+        </div>
+        <div id="route-map-box" class="route-map" hidden>
+          <div id="route-map" aria-label="Mapa de la ruta"></div>
+          <div class="route-map-foot"><div><strong id="route-map-km"></strong><small id="route-map-src"></small></div><span>Abrir en Mapas ↗</span></div>
+          <button type="button" id="route-map-close" class="route-map-close" aria-label="Cerrar mapa">✕</button>
         </div>
 
         <div class="segmented" id="trip-kind">
@@ -177,6 +182,12 @@
         </div>
       </div>
       <div class="card">
+        <h2>Google (opcional)</h2>
+        <p class="hint">Con tu clave de Google, las sugerencias y los km salen como en Google Maps. Se guarda solo en este móvil y no va en las copias.</p>
+        <input id="google-key" type="password" placeholder="Clave de API (AIza…)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Clave de API de Google">
+        <p class="hint google-usage" id="google-usage"></p>
+      </div>
+      <div class="card">
         <h2>Viajes comunes</h2>
         <ul id="routes-settings" class="list"></ul>
       </div>
@@ -198,6 +209,6 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

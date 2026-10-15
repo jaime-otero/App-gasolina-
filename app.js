@@ -252,22 +252,95 @@ function renderRoutes() {
 }
 
 // ---------- Mapas: calcular km y abrir la ruta ----------
-// Direcciones con OpenStreetMap (Nominatim) y distancia por carretera con OSRM.
-// Son servicios gratuitos y sin clave; necesitan conexión.
+// Con clave de Google (Ajustes), sugerencias con Places y km con Routes, como en Google Maps.
+// Sin clave, o si Google falla, direcciones con OpenStreetMap (Nominatim) y distancia con OSRM,
+// gratuitos y sin clave. Todo necesita conexión.
 const routeText = r => [r.from, r.to].filter(Boolean).join(' → ');
 
-// Coordenadas de «📍 Mi ubicación» o de una sugerencia elegida,
-// válidas mientras no se cambie el texto del campo
-let fromCoords = null;
-let toCoords = null;
+// Sitio exacto de «📍 Mi ubicación» o de una sugerencia elegida: { lat, lon } o, si viene
+// de Google, { placeId }. Vale mientras no se cambie el texto del campo.
+let fromPlace = null;
+let toPlace = null;
 
 function setRouteFields(from, to) {
   $('#trip-from').value = from || '';
   $('#trip-to').value = to || '';
-  fromCoords = toCoords = null;
+  fromPlace = toPlace = null;
+  hideRouteMap();
 }
-$('#trip-from').addEventListener('input', () => { fromCoords = null; });
-$('#trip-to').addEventListener('input', () => { toCoords = null; });
+$('#trip-from').addEventListener('input', () => { fromPlace = null; hideRouteMap(); });
+$('#trip-to').addEventListener('input', () => { toPlace = null; hideRouteMap(); });
+
+// ---------- Google (opcional) ----------
+// La clave va aparte de los datos para que no salga en las copias exportadas.
+const GOOGLE_KEY = 'gasolina.googleKey';
+const GOOGLE_COUNT = 'gasolina.googleCount';
+// Tope propio por día, por debajo de lo gratis al mes (5.000 rutas y 10.000 sugerencias)
+const GOOGLE_LIMITS = { routes: 50, places: 200 };
+
+function googleKey() {
+  try { return localStorage.getItem(GOOGLE_KEY) || ''; } catch { return ''; }
+}
+
+function googleCount() {
+  try {
+    const c = JSON.parse(localStorage.getItem(GOOGLE_COUNT));
+    if (c && c.date === todayISO()) return c;
+  } catch { /* contador ilegible: empieza de cero */ }
+  return { date: todayISO(), routes: 0, places: 0 };
+}
+
+// Apunta una llamada a Google si hay clave y no se ha llegado al tope de hoy
+function useGoogle(kind) {
+  if (!googleKey()) return false;
+  const c = googleCount();
+  if (c[kind] >= GOOGLE_LIMITS[kind]) return false;
+  c[kind]++;
+  try { localStorage.setItem(GOOGLE_COUNT, JSON.stringify(c)); } catch { return false; } // sin contador no se arriesga
+  return true;
+}
+
+async function googlePost(url, body, fieldMask, signal) {
+  const headers = { 'Content-Type': 'application/json', 'X-Goog-Api-Key': googleKey() };
+  if (fieldMask) headers['X-Goog-FieldMask'] = fieldMask;
+  const res = await fetch(url, {
+    method: 'POST', headers, body: JSON.stringify(body), signal,
+    // Manda la URL completa de la app, para que valga la restricción de la clave a esta web
+    referrerPolicy: 'no-referrer-when-downgrade',
+  });
+  if (!res.ok) throw new Error(`Google HTTP ${res.status}`);
+  return res.json();
+}
+
+// Escribir y elegir una sugerencia es una sesión; se renueva al elegir
+let placesSession = null;
+async function googleSuggest(text, signal) {
+  placesSession ||= crypto.randomUUID ? crypto.randomUUID() : uid();
+  const body = { input: text, sessionToken: placesSession, languageCode: 'es', regionCode: 'es' };
+  if (fromPlace?.lat != null) {
+    body.locationBias = { circle: { center: { latitude: fromPlace.lat, longitude: fromPlace.lon }, radius: 50000 } };
+  }
+  const { suggestions = [] } = await googlePost('https://places.googleapis.com/v1/places:autocomplete', body, null, signal);
+  return suggestions.map(s => s.placePrediction).filter(Boolean).map(p => {
+    const main = p.structuredFormat?.mainText?.text || p.text?.text || '';
+    const detail = (p.structuredFormat?.secondaryText?.text || '').replace(/, España$/, '');
+    return { main, detail, label: [main, detail].filter(Boolean).join(', '), point: { placeId: p.placeId }, google: true };
+  }).filter(s => s.main && s.point.placeId);
+}
+
+async function googleRoute(a, b) {
+  const waypoint = p => p.placeId ? { placeId: p.placeId }
+    : p.lat != null ? { location: { latLng: { latitude: p.lat, longitude: p.lon } } }
+    : { address: p.address };
+  const data = await googlePost('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    origin: waypoint(a), destination: waypoint(b),
+    travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE',
+    polylineEncoding: 'GEO_JSON_LINESTRING', languageCode: 'es-ES', units: 'METRIC',
+  }, 'routes.distanceMeters,routes.polyline.geoJsonLinestring');
+  const r = data.routes?.[0];
+  if (!r?.distanceMeters) return null;
+  return { km: r.distanceMeters / 1000, coords: r.polyline?.geoJsonLinestring?.coordinates || [], source: 'Google' };
+}
 
 async function getJSON(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -297,17 +370,32 @@ async function reverseGeocode({ lat, lon }) {
   return [street, town].filter(Boolean).join(', ') || display_name;
 }
 
-async function drivingKm(a, b) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+// Distancia por carretera y el trazado de la ruta ([lon, lat] por punto) para el mapa
+async function drivingRoute(a, b) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
   const data = await getJSON(url);
   if (data.code !== 'Ok' || !data.routes.length) return null;
-  return data.routes[0].distance / 1000;
+  const [r] = data.routes;
+  return { km: r.distance / 1000, coords: r.geometry.coordinates, source: 'OpenStreetMap' };
 }
 
-// Sugerencias mientras se escribe, con Photon (OpenStreetMap): gratis y sin clave
+// Sugerencias mientras se escribe: Google si hay clave, si no Photon (OpenStreetMap)
 async function suggestPlaces(text, signal) {
+  if (useGoogle('places')) {
+    try {
+      return await googleSuggest(text, signal);
+    } catch (e) {
+      if (signal.aborted) throw e;
+      /* falla Google: sigue con Photon */
+    }
+  }
+  return photonSuggest(text, signal);
+}
+
+// Photon (OpenStreetMap): gratis y sin clave
+async function photonSuggest(text, signal) {
   // Prioriza lo cercano al origen ya elegido, o si no, el centro de España
-  const near = fromCoords || { lat: 40.4, lon: -3.7 };
+  const near = fromPlace?.lat != null ? fromPlace : { lat: 40.4, lon: -3.7 };
   const url = `https://photon.komoot.io/api/?limit=5&lat=${near.lat}&lon=${near.lon}&q=` + encodeURIComponent(text);
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -337,6 +425,7 @@ function setupSuggest(input, list, onPick) {
   const pick = s => {
     input.value = s.label;
     onPick(s.point);
+    placesSession = null;
     close();
   };
   input.addEventListener('input', () => {
@@ -356,6 +445,7 @@ function setupSuggest(input, list, onPick) {
         // pointerdown + preventDefault para que el campo no pierda el foco antes del toque
         li.addEventListener('pointerdown', e => { e.preventDefault(); pick(items[i]); });
       });
+      if (items[0].google) list.insertAdjacentHTML('beforeend', '<li class="suggest-by" aria-hidden="true">con Google</li>');
       active = -1;
       list.hidden = false;
     }, 300);
@@ -374,8 +464,8 @@ function setupSuggest(input, list, onPick) {
   });
   input.addEventListener('blur', () => { clearTimeout(timer); ctrl?.abort(); close(); });
 }
-setupSuggest($('#trip-from'), $('#trip-from-suggest'), p => { fromCoords = p; });
-setupSuggest($('#trip-to'), $('#trip-to-suggest'), p => { toCoords = p; });
+setupSuggest($('#trip-from'), $('#trip-from-suggest'), p => { fromPlace = p; });
+setupSuggest($('#trip-to'), $('#trip-to-suggest'), p => { toPlace = p; });
 
 function busy(btn, label) {
   const old = btn.textContent;
@@ -392,7 +482,7 @@ $('#locate-btn').addEventListener('click', () => {
     let label = 'Mi ubicación';
     try { label = await reverseGeocode(point); } catch { /* sin conexión: basta con las coordenadas */ }
     $('#trip-from').value = label;
-    fromCoords = point;
+    fromPlace = point;
     done();
     $('#trip-to').focus();
   }, () => {
@@ -408,12 +498,22 @@ async function calcKm() {
   if (!navigator.onLine) return toast('Sin conexión: pon los km a mano');
   const done = busy($('#calc-km-btn'), '⏳ Calculando…');
   try {
-    const a = fromCoords || await geocode(from);
-    if (!a) return toast(`No encuentro «${from}»`);
-    const b = toCoords || await geocode(to);
-    if (!b) return toast(`No encuentro «${to}»`);
-    const km = await drivingKm(a, b);
-    if (km == null) return toast('No hay ruta en coche entre esos sitios');
+    let route = null;
+    if (useGoogle('routes')) {
+      try {
+        route = await googleRoute(fromPlace || { address: from }, toPlace || { address: to });
+      } catch { /* falla Google: se calcula con OpenStreetMap */ }
+    }
+    if (!route) {
+      const a = fromPlace?.lat != null ? fromPlace : await geocode(from);
+      if (!a) return toast(`No encuentro «${from}»`);
+      const b = toPlace?.lat != null ? toPlace : await geocode(to);
+      if (!b) return toast(`No encuentro «${to}»`);
+      route = await drivingRoute(a, b);
+      if (!route) return toast('No hay ruta en coche entre esos sitios');
+    }
+    const { km } = route;
+    showRouteMap(route);
     const total = roundTrip ? km * 2 : km;
     $('#trip-km').value = Math.round(total * 10) / 10;
     updateResult();
@@ -442,11 +542,78 @@ function openMaps(from, to) {
     : `https://www.google.com/maps/dir/?api=1${from ? `&origin=${q(from)}` : ''}&destination=${q(to)}&travelmode=driving`;
   window.open(url, '_blank');
 }
-$('#open-maps-btn').addEventListener('click', () => {
+function openFormInMaps() {
   // Con «📍» se manda la posición exacta en vez del texto aproximado
-  const from = fromCoords ? `${fromCoords.lat},${fromCoords.lon}` : $('#trip-from').value.trim();
+  const from = fromPlace?.lat != null ? `${fromPlace.lat},${fromPlace.lon}` : $('#trip-from').value.trim();
   openMaps(from, $('#trip-to').value.trim());
-});
+}
+$('#open-maps-btn').addEventListener('click', openFormInMaps);
+
+// Ventanita con el mapa de la ruta tras «Calcular km». Usa Leaflet con mapas de
+// OpenStreetMap: gratis y sin clave. Se carga solo la primera vez que hace falta.
+const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+let leafletLoading = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  return leafletLoading ||= new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = LEAFLET + 'leaflet.min.css';
+    css.integrity = 'sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==';
+    css.crossOrigin = 'anonymous';
+    const js = document.createElement('script');
+    js.src = LEAFLET + 'leaflet.min.js';
+    js.integrity = 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==';
+    js.crossOrigin = 'anonymous';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => { leafletLoading = null; js.remove(); reject(new Error('leaflet')); };
+    document.head.append(css, js);
+  });
+}
+
+let routeMap = null;
+let routeLayer = null;
+let routeMapToken = 0; // descarta un mapa que llega tarde si la ruta ya cambió
+
+function hideRouteMap() {
+  routeMapToken++;
+  $('#route-map-box').hidden = true;
+}
+
+async function showRouteMap({ coords, km, source }) {
+  const token = ++routeMapToken;
+  if (coords.length < 2) return hideRouteMap();
+  let L;
+  try { L = await loadLeaflet(); } catch { return; /* sin mapa: los km ya están */ }
+  if (token !== routeMapToken) return;
+  const box = $('#route-map-box');
+  box.hidden = false;
+  $('#route-map-km').textContent = `${fmt(km, 1)} km`;
+  $('#route-map-src').textContent = `Ruta: ${source}`;
+  if (!routeMap) {
+    // Solo para mirar: así no se engancha al hacer scroll. Al tocarlo se abre en Mapas.
+    routeMap = L.map('route-map', {
+      zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false,
+      doubleClickZoom: false, boxZoom: false, keyboard: false,
+    });
+    routeMap.attributionControl.setPrefix(false);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap',
+    }).addTo(routeMap);
+  }
+  routeLayer?.remove();
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--accent').trim() || '#0f766e';
+  const latlngs = coords.map(([lon, lat]) => [lat, lon]);
+  const line = L.polyline(latlngs, { color: accent, weight: 5, opacity: .9 });
+  const dot = (p, fill) => L.circleMarker(p, { radius: 7, color: '#fff', weight: 3, fillColor: fill, fillOpacity: 1 });
+  routeLayer = L.layerGroup([line, dot(latlngs[0], accent), dot(latlngs[latlngs.length - 1], css.getPropertyValue('--danger').trim() || '#b91c1c')]).addTo(routeMap);
+  routeMap.invalidateSize();
+  routeMap.fitBounds(line.getBounds(), { padding: [24, 24] });
+}
+
+$('#route-map-box').addEventListener('click', openFormInMaps);
+$('#route-map-close').addEventListener('click', e => { e.stopPropagation(); hideRouteMap(); });
 
 document.querySelectorAll('#maps-picker button').forEach(b => b.addEventListener('click', () => {
   state.mapsApp = b.dataset.maps;
@@ -810,6 +977,12 @@ function renderSettings() {
 
   document.querySelectorAll('#maps-picker button').forEach(b => b.classList.toggle('on', b.dataset.maps === state.mapsApp));
 
+  $('#google-key').value = googleKey();
+  const gc = googleCount();
+  $('#google-usage').textContent = googleKey()
+    ? `Hoy: ${gc.routes}/${GOOGLE_LIMITS.routes} rutas y ${gc.places}/${GOOGLE_LIMITS.places} búsquedas. Al llegar al tope se usa OpenStreetMap hasta mañana.`
+    : 'Sin clave: se usa OpenStreetMap.';
+
   const routes = $('#routes-settings');
   routes.innerHTML = '';
   if (!state.routes.length) {
@@ -841,6 +1014,16 @@ function renderSettings() {
     routes.appendChild(li);
   }
 }
+
+$('#google-key').addEventListener('change', e => {
+  const key = e.target.value.trim();
+  try {
+    if (key) localStorage.setItem(GOOGLE_KEY, key);
+    else localStorage.removeItem(GOOGLE_KEY);
+  } catch { return toast('No se pudo guardar la clave'); }
+  renderSettings();
+  toast(key ? 'Clave de Google guardada' : 'Clave de Google borrada');
+});
 
 $('#export-btn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });

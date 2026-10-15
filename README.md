@@ -8,6 +8,11 @@ Web app (PWA) para el iPhone que calcula cuánta gasolina gastas en cada viaje c
 - **Calcular los km con el mapa**: pones *Desde* y *Hasta* (o 📍 para usar tu ubicación) y pulsas *Calcular km*.
   Busca las direcciones en OpenStreetMap (Nominatim) y la distancia por carretera con OSRM: gratis, sin clave, pero necesita conexión.
   Mientras escribes salen **sugerencias de direcciones** (Photon, también de OpenStreetMap y gratis); al elegir una se usa su posición exacta.
+- **Mapa de la ruta**: al calcular los km sale una ventanita con el mapa y el recorrido (Leaflet + mapas de OpenStreetMap, gratis y sin clave).
+  Al tocarla se abre la ruta en Apple Maps o Google Maps.
+- **Google (opcional)**: con una clave de Google en Ajustes, las sugerencias (también de sitios concretos, como restaurantes) salen de Places API (New)
+  y los km de Routes API, como en Google Maps. La clave se guarda solo en el móvil y no va en las copias. La app pone un tope propio
+  de 50 rutas y 200 búsquedas al día, muy por debajo de lo gratis al mes; al llegar a él, o si Google falla, vuelve a OpenStreetMap.
 - **Ida / Ida y vuelta**: con un toque se duplican los km (o se vuelven a dividir).
 - **Ver en Mapas**: abre la ruta en Apple Maps o Google Maps (se elige en Ajustes), también desde cada viaje del resumen.
 - **Consumo predeterminado por coche** (L/100 km), editable en Ajustes. También se puede cambiar en un viaje concreto.
